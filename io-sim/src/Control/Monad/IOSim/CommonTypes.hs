@@ -9,7 +9,6 @@ module Control.Monad.IOSim.CommonTypes where
 import           Control.Monad.Class.MonadSTM (TraceValue)
 import           Control.Monad.ST.Lazy
 
-import           Data.Function (on)
 import           Data.Hashable (Hashable, hashWithSalt)
 import           Data.HashMap.Strict (HashMap)
 import           Data.Set (Set)
@@ -82,7 +81,7 @@ data TVar s a = TVar {
      }
 
 instance Eq (TVar s a) where
-    (==) = on (==) tvarId
+    TVar {tvarId = a} == TVar {tvarId = b} = a == b
 
 data SomeTVar s where
   SomeTVar :: !(TVar s a) -> SomeTVar s
