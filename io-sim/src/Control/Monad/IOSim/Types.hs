@@ -134,8 +134,8 @@ traceSTM x = STM $ \k -> OutputStm (toDyn x) (k ())
 data SimA s a where
   Return       :: a -> SimA s a
 
-  Say          :: String -> SimA s b -> SimA s b
-  Output       :: Dynamic -> SimA s b -> SimA s b
+  Say          :: !String -> SimA s b -> SimA s b
+  Output       :: !Dynamic -> SimA s b -> SimA s b
 
   LiftST       :: StrictST.ST s a -> (a -> SimA s b) -> SimA s b
 
@@ -160,7 +160,7 @@ data SimA s a where
   Atomically   :: STM  s a -> (a -> SimA s b) -> SimA s b
 
   ThrowTo      :: SomeException -> ThreadId -> SimA s a -> SimA s a
-  SetMaskState :: MaskingState  -> IOSim s a -> (a -> SimA s b) -> SimA s b
+  SetMaskState :: !MaskingState  -> IOSim s a -> (a -> SimA s b) -> SimA s b
   GetMaskState :: (MaskingState -> SimA s b) -> SimA s b
 
   ExploreRaces :: SimA s b -> SimA s b
@@ -177,15 +177,15 @@ data StmA s a where
   ReturnStm    :: a -> StmA s a
   ThrowStm     :: SomeException -> StmA s a
 
-  NewTVar      :: Maybe String -> x -> (TVar s x -> StmA s b) -> StmA s b
-  LabelTVar    :: String -> TVar s a -> StmA s b -> StmA s b
-  ReadTVar     :: TVar s a -> (a -> StmA s b) -> StmA s b
-  WriteTVar    :: TVar s a ->  a -> StmA s b  -> StmA s b
+  NewTVar      :: !(Maybe String) -> x -> (TVar s x -> StmA s b) -> StmA s b
+  LabelTVar    :: !String -> TVar s a -> StmA s b -> StmA s b
+  ReadTVar     :: !(TVar s a) -> (a -> StmA s b) -> StmA s b
+  WriteTVar    :: !(TVar s a) ->  a -> StmA s b  -> StmA s b
   Retry        :: StmA s b
   OrElse       :: StmA s a -> StmA s a -> (a -> StmA s b) -> StmA s b
 
-  SayStm       :: String -> StmA s b -> StmA s b
-  OutputStm    :: Dynamic -> StmA s b -> StmA s b
+  SayStm       :: !String -> StmA s b -> StmA s b
+  OutputStm    :: !Dynamic -> StmA s b -> StmA s b
   TraceTVar    :: forall s a b.
                   TVar s a
                -> (Maybe a -> a -> ST s TraceValue)
