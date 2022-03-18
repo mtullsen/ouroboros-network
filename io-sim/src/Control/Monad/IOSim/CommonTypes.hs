@@ -14,6 +14,9 @@ import           Data.HashMap.Strict (HashMap)
 import           Data.Set (Set)
 import           Data.STRef.Lazy
 
+import           Data.Maybe.Strict (SMaybe (..))
+
+
 data ThreadId = RacyThreadId [Int]
               | ThreadId     [Int]    -- non racy threads have higher priority
   deriving (Eq, Ord, Show)
@@ -52,7 +55,7 @@ data TVar s a = TVar {
        tvarId      :: !TVarId,
 
        -- | Label.
-       tvarLabel   :: !(STRef s (Maybe TVarLabel)),
+       tvarLabel   :: !(STRef s (SMaybe TVarLabel)),
 
        -- | The var's current value
        --

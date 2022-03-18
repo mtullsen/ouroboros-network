@@ -72,6 +72,9 @@ import           Data.Dynamic
 
 import           GHC.Exts (fromList)
 
+import           Data.Maybe.Strict (SMaybe (..))
+import qualified Data.Maybe.Strict as Maybe.Strict
+
 import           Control.Exception (NonTermination (..),
                    assert, throw)
 import           Control.Monad (join)
@@ -103,7 +106,7 @@ data Thread s a = Thread {
     -- other threads blocked in a ThrowTo to us because we are or were masked
     threadThrowTo :: ![(SomeException, Labelled ThreadId)],
     threadClockId :: !ClockId,
-    threadLabel   ::  Maybe ThreadLabel,
+    threadLabel   :: !(SMaybe ThreadLabel),
     threadNextTId :: !Int
   }
 
@@ -328,10 +331,10 @@ schedule !thread@Thread{
 
     NewTimeout d k -> do
       !tvar  <- execNewTVar nextVid
-                            (Just $ "<<timeout-state " ++ show (unTimeoutId nextTmid) ++ ">>")
+                            (SJust $ "<<timeout-state " ++ show (unTimeoutId nextTmid) ++ ">>")
                             TimeoutPending
       !tvar' <- execNewTVar (succ nextVid)
-                            (Just $ "<<timeout " ++ show (unTimeoutId nextTmid) ++ ">>")
+                            (SJust $ "<<timeout " ++ show (unTimeoutId nextTmid) ++ ">>")
                             False
       let !expiry  = d `addTime` time
           !t       = Timeout tvar tvar' nextTmid
@@ -401,7 +404,7 @@ schedule !thread@Thread{
                              , threadMasking = threadMasking thread
                              , threadThrowTo = []
                              , threadClockId = threadClockId thread
-                             , threadLabel   = Nothing
+                             , threadLabel   = SNothing
                              , threadNextTId = 1
                              }
           !threads' = HashMap.insert tid' thread'' threads
@@ -466,12 +469,12 @@ schedule !thread@Thread{
 
     LabelThread tid' l k | tid' == tid -> do
       let thread' = thread { threadControl = ThreadControl k ctl
-                           , threadLabel   = Just l }
+                           , threadLabel   = SJust l }
       schedule thread' simstate
 
     LabelThread tid' l k -> do
       let thread'  = thread { threadControl = ThreadControl k ctl }
-          threads' = HashMap.adjust (\t -> t { threadLabel = Just l }) tid' threads
+          threads' = HashMap.adjust (\t -> t { threadLabel = SJust l }) tid' threads
       schedule thread' simstate { threads = threads' }
 
     GetMaskState k -> do
@@ -665,7 +668,7 @@ reschedule simstate@SimState{ threads, timers, curTime = time } =
         trace <- reschedule simstate' { curTime = time'
                                       , timers  = timers' }
         return $
-          traceMany ([ (time', ThreadId [-1], Just "timer", EventTimerExpired tmid)
+          traceMany ([ (time', ThreadId [-1], SJust "timer", EventTimerExpired tmid)
                      | tmid <- tmids ]
                   ++ [ (time', tid', tlbl', EventTxWakeup vids)
                      | tid' <- unblocked
@@ -756,14 +759,16 @@ removeMinimums = \psq ->
           | p == p' -> collectAll (k:ks) p (x:xs) psq'
         _           -> (reverse ks, p, reverse xs, psq)
 
-traceMany :: [(Time, ThreadId, Maybe ThreadLabel, SimEventType)]
+traceMany :: [(Time, ThreadId, SMaybe ThreadLabel, SimEventType)]
           -> SimTrace a -> SimTrace a
-traceMany []                      trace = trace
+traceMany []                            trace = trace
 traceMany ((time, tid, tlbl, event):ts) trace =
     SimTrace time tid tlbl event (traceMany ts trace)
 
-lookupThreadLabel :: ThreadId -> HashMap ThreadId (Thread s a) -> Maybe ThreadLabel
-lookupThreadLabel tid threads = join (threadLabel <$> HashMap.lookup tid threads)
+lookupThreadLabel :: ThreadId -> HashMap ThreadId (Thread s a) -> SMaybe ThreadLabel
+lookupThreadLabel tid threads = join
+                              . Maybe.Strict.fromLazy
+                              $ threadLabel <$> HashMap.lookup tid threads
 
 
 -- | The most general method of running 'IOSim' is in 'ST' monad.  One can
@@ -782,7 +787,7 @@ runSimTraceST mainAction = schedule mainThread initialState
         threadMasking = Unmasked,
         threadThrowTo = [],
         threadClockId = ClockId [],
-        threadLabel   = Just "main",
+        threadLabel   = SJust "main",
         threadNextTId = 1
       }
 
@@ -794,7 +799,7 @@ runSimTraceST mainAction = schedule mainThread initialState
 execAtomically :: forall s a c.
                   Time
                -> ThreadId
-               -> Maybe ThreadLabel
+               -> SMaybe ThreadLabel
                -> TVarId
                -> StmA s a
                -> (StmTxResult s a -> ST s (SimTrace c))
@@ -903,7 +908,7 @@ execAtomically !time !tid !tlbl !nextVid0 action0 k0 =
         go ctl read written writtenSeq (SomeTVar v : createdSeq) (succ nextVid) (k v)
 
       LabelTVar !label tvar k -> do
-        !_ <- writeSTRef (tvarLabel tvar) $! (Just label)
+        !_ <- writeSTRef (tvarLabel tvar) $! (SJust label)
         go ctl read written writtenSeq createdSeq nextVid k
 
       TraceTVar tvar f k -> do
@@ -970,7 +975,7 @@ execAtomically' = go Map.empty
       _ -> error "execAtomically': only for special case of reads and writes"
 
 
-execNewTVar :: TVarId -> Maybe String -> a -> ST s (TVar s a)
+execNewTVar :: TVarId -> SMaybe String -> a -> ST s (TVar s a)
 execNewTVar nextVid !mbLabel x = do
     !tvarLabel   <- newSTRef mbLabel
     !tvarCurrent <- newSTRef x

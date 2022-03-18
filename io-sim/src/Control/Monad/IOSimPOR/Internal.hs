@@ -71,6 +71,9 @@ import           Data.Set (Set, fromList)
 import qualified Data.Set as Set
 import           Data.Time (UTCTime (..), fromGregorian)
 
+import           Data.Maybe.Strict (SMaybe (..))
+import qualified Data.Maybe.Strict as Maybe.Strict
+
 import           Control.Exception (NonTermination (..), assert, throw)
 import           Control.Monad (join)
 
@@ -104,7 +107,7 @@ data Thread s a = Thread {
     -- other threads blocked in a ThrowTo to us because we are or were masked
     threadThrowTo :: ![(SomeException, Labelled ThreadId, VectorClock)],
     threadClockId :: !ClockId,
-    threadLabel   :: Maybe ThreadLabel,
+    threadLabel   :: !(SMaybe ThreadLabel),
     threadNextTId :: !Int,
     threadStep    :: !Int,
     threadVClock  :: VectorClock,
@@ -426,11 +429,11 @@ schedule thread@Thread{
 
     NewTimeout d k -> do
       tvar  <- execNewTVar nextVid
-                           (Just $ "<<timeout-state " ++ show (unTimeoutId nextTmid) ++ ">>")
+                           (SJust $ "<<timeout-state " ++ show (unTimeoutId nextTmid) ++ ">>")
                            TimeoutPending
       modifySTRef (tvarVClock tvar) (leastUpperBoundVClock vClock)
       tvar' <- execNewTVar (succ nextVid)
-                           (Just $ "<<timeout " ++ show (unTimeoutId nextTmid) ++ ">>")
+                           (SJust $ "<<timeout " ++ show (unTimeoutId nextTmid) ++ ">>")
                            False
       modifySTRef (tvarVClock tvar') (leastUpperBoundVClock vClock)
       let expiry  = d `addTime` time
@@ -513,7 +516,7 @@ schedule thread@Thread{
                             , threadMasking = threadMasking thread
                             , threadThrowTo = []
                             , threadClockId = threadClockId thread
-                            , threadLabel   = Nothing
+                            , threadLabel   = SNothing
                             , threadNextTId = 1
                             , threadStep    = 0
                             , threadVClock  = insertVClock tid' 0
@@ -601,12 +604,12 @@ schedule thread@Thread{
 
     LabelThread tid' l k | tid' == tid -> do
       let thread' = thread { threadControl = ThreadControl k ctl
-                           , threadLabel   = Just l }
+                           , threadLabel   = SJust l }
       schedule thread' simstate
 
     LabelThread tid' l k -> do
       let thread'  = thread { threadControl = ThreadControl k ctl }
-          threads' = HashMap.adjust (\t -> t { threadLabel = Just l }) tid' threads
+          threads' = HashMap.adjust (\t -> t { threadLabel = SJust l }) tid' threads
       schedule thread' simstate { threads = threads' }
 
     ExploreRaces k -> do
@@ -819,7 +822,7 @@ reschedule simstate@SimState{ runqueue, threads,
                               control=control@(ControlFollow ((tid,tstep):_) _),
                               curTime=time
                               } =
-    fmap (SimPORTrace time tid tstep Nothing (EventReschedule control)) $
+    fmap (SimPORTrace time tid tstep SNothing (EventReschedule control)) $
     assert (tid `elem` runqueue) $
     assert (tid `HashMap.member` threads) $
     invariant Nothing simstate $
@@ -875,7 +878,7 @@ reschedule simstate@SimState{ runqueue = [], threads, timers, curTime = time, ra
         trace <- reschedule simstate'' { curTime = time'
                                        , timers  = timers' }
         let traceEntries =
-                     [ (time', ThreadId [-1], (-1), Just "timer", EventTimerExpired tmid)
+                     [ (time', ThreadId [-1], (-1), SJust "timer", EventTimerExpired tmid)
                      | tmid <- tmids ]
                   ++ [ (time', tid', (-1), tlbl', EventTxWakeup vids)
                      | tid' <- unblocked
@@ -981,14 +984,16 @@ removeMinimums = \psq ->
           | p == p' -> collectAll (k:ks) p (x:xs) psq'
         _           -> (reverse ks, p, reverse xs, psq)
 
-traceMany :: [(Time, ThreadId, Int, Maybe ThreadLabel, SimEventType)]
+traceMany :: [(Time, ThreadId, Int, SMaybe ThreadLabel, SimEventType)]
           -> SimTrace a -> SimTrace a
 traceMany []                                   trace = trace
 traceMany ((time, tid, tstep, tlbl, event):ts) trace =
     SimPORTrace time tid tstep tlbl event (traceMany ts trace)
 
-lookupThreadLabel :: ThreadId -> HashMap ThreadId (Thread s a) -> Maybe ThreadLabel
-lookupThreadLabel tid threads = join (threadLabel <$> HashMap.lookup tid threads)
+lookupThreadLabel :: ThreadId -> HashMap ThreadId (Thread s a) -> SMaybe ThreadLabel
+lookupThreadLabel tid threads = join
+                              . Maybe.Strict.fromLazy
+                              $ threadLabel <$> HashMap.lookup tid threads
 
 
 -- | The most general method of running 'IOSim' is in 'ST' monad.  One can
@@ -1020,7 +1025,7 @@ controlSimTraceST limit control mainAction =
         threadMasking = Unmasked,
         threadThrowTo = [],
         threadClockId = ClockId [],
-        threadLabel   = Just "main",
+        threadLabel   = SJust "main",
         threadNextTId = 1,
         threadStep    = 0,
         threadVClock  = insertVClock (ThreadId []) 0 bottomVClock,
@@ -1036,7 +1041,7 @@ controlSimTraceST limit control mainAction =
 execAtomically :: forall s a c.
                   Time
                -> ThreadId
-               -> Maybe ThreadLabel
+               -> SMaybe ThreadLabel
                -> TVarId
                -> StmA s a
                -> (StmTxResult s a -> ST s (SimTrace c))
@@ -1150,7 +1155,7 @@ execAtomically time tid tlbl nextVid0 action0 k0 =
         go ctl read written' writtenSeq (SomeTVar v : createdSeq) (succ nextVid) (k v)
 
       LabelTVar !label tvar k -> do
-        writeSTRef (tvarLabel tvar) $! (Just label)
+        writeSTRef (tvarLabel tvar) $! (SJust label)
         go ctl read written writtenSeq createdSeq nextVid k
 
       TraceTVar tvar f k -> do
@@ -1220,7 +1225,7 @@ execAtomically' = go Map.empty
       _ -> error "execAtomically': only for special case of reads and writes"
 
 
-execNewTVar :: TVarId -> Maybe String -> a -> ST s (TVar s a)
+execNewTVar :: TVarId -> SMaybe String -> a -> ST s (TVar s a)
 execNewTVar nextVid !mbLabel x = do
     tvarLabel   <- newSTRef mbLabel
     tvarCurrent <- newSTRef x

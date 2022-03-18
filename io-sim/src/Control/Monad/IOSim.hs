@@ -85,6 +85,8 @@ import qualified Data.Set as Set
 import           Data.Typeable (Typeable)
 
 import           Data.List.Trace (Trace (..))
+import           Data.Maybe.Strict (SMaybe (..))
+import qualified Data.Maybe.Strict as Maybe.Strict
 
 import           Control.Exception (throw)
 
@@ -321,7 +323,7 @@ traceResult strict = go
     go (TraceDeadlock   _   threads)    = Left (FailureDeadlock threads)
     go TraceLoop{}                      = error "Impossible: traceResult TraceLoop{}"
 
-traceEvents :: SimTrace a -> [(Time, ThreadId, Maybe ThreadLabel, SimEventType)]
+traceEvents :: SimTrace a -> [(Time, ThreadId, SMaybe ThreadLabel, SimEventType)]
 traceEvents (SimTrace time tid tlbl event t)      = (time, tid, tlbl, event)
                                                   : traceEvents t
 traceEvents (SimPORTrace time tid _ tlbl event t) = (time, tid, tlbl, event)
@@ -329,7 +331,7 @@ traceEvents (SimPORTrace time tid _ tlbl event t) = (time, tid, tlbl, event)
 traceEvents _                                     = []
 
 
-ppEvents :: [(Time, ThreadId, Maybe ThreadLabel, SimEventType)]
+ppEvents :: [(Time, ThreadId, SMaybe ThreadLabel, SimEventType)]
          -> String
 ppEvents events =
     intercalate "\n"
@@ -347,7 +349,7 @@ ppEvents events =
                 | (_, tid, _, _) <- events
                 ]
     width     = maximum
-                [ maybe 0 length threadLabel
+                [ Maybe.Strict.maybe 0 length threadLabel
                 | (_, _, threadLabel, _) <- events
                 ]
 
@@ -426,10 +428,10 @@ exploreSimTrace optsf mainAction k =
       [ n `div` k + if i<n `mod` k then 1 else 0
       | i <- [0..k-1] ]
 
-    showThread :: (ThreadId,Maybe ThreadLabel) -> String
+    showThread :: (ThreadId,SMaybe ThreadLabel) -> String
     showThread (tid,lab) =
-      show tid ++ (case lab of Nothing -> ""
-                               Just l  -> " ("++l++")")
+      show tid ++ (case lab of SNothing -> ""
+                               SJust l  -> " ("++l++")")
 
     -- It is possible for the same control to be generated several times.
     -- To avoid exploring them twice, we keep a cache of explored schedules.
@@ -471,8 +473,8 @@ raceReversals ControlFollow{}     = error "Impossible: raceReversals ControlFoll
 
 compareTraces :: Maybe (SimTrace a1)
               -> SimTrace a2
-              -> (Maybe ((Time, ThreadId, Maybe ThreadLabel),
-                         Set.Set (ThreadId, Maybe ThreadLabel)),
+              -> (Maybe ((Time, ThreadId, SMaybe ThreadLabel),
+                         Set.Set (ThreadId, SMaybe ThreadLabel)),
                   SimTrace a2)
 compareTraces Nothing trace = (Nothing, trace)
 compareTraces (Just passing) trace = unsafePerformIO $ do

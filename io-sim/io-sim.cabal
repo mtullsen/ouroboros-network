@@ -26,6 +26,7 @@ source-repository head
 library
   hs-source-dirs:      src
   exposed-modules:     Data.List.Trace,
+                       Data.Maybe.Strict,
                        Control.Monad.IOSim,
                        Control.Monad.IOSim.Types
   other-modules:       Control.Monad.IOSim.CommonTypes,

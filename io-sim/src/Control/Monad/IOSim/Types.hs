@@ -96,7 +96,6 @@ import qualified Control.Monad.Fail as Fail
 import           Data.Bifoldable
 import           Data.Bifunctor (bimap)
 import           Data.Map.Strict (Map)
-import           Data.Maybe (fromMaybe)
 import           Data.Monoid (Endo (..))
 import           Data.Dynamic (Dynamic, toDyn)
 import           Data.Semigroup (Max (..))
@@ -105,6 +104,9 @@ import           Data.STRef.Lazy
 import qualified Data.List.Trace as Trace
 import qualified Debug.Trace as Debug
 import           Text.Printf
+
+import           Data.Maybe.Strict (SMaybe (..))
+import qualified Data.Maybe.Strict as Maybe.Strict
 
 import           GHC.Generics (Generic)
 import           GHC.Exts (oneShot)
@@ -178,7 +180,7 @@ data StmA s a where
   ReturnStm    :: a -> StmA s a
   ThrowStm     :: SomeException -> StmA s a
 
-  NewTVar      :: !(Maybe String) -> x -> (TVar s x -> StmA s b) -> StmA s b
+  NewTVar      :: !(SMaybe String) -> x -> (TVar s x -> StmA s b) -> StmA s b
   LabelTVar    :: !String -> TVar s a -> StmA s b -> StmA s b
   ReadTVar     :: !(TVar s a) -> (a -> StmA s b) -> StmA s b
   WriteTVar    :: !(TVar s a) ->  a -> StmA s b  -> StmA s b
@@ -394,7 +396,7 @@ instance MonadSTM (IOSim s) where
 
   atomically action = IOSim $ oneShot $ \k -> Atomically action k
 
-  newTVar         x = STM $ oneShot $ \k -> NewTVar Nothing x k
+  newTVar         x = STM $ oneShot $ \k -> NewTVar SNothing x k
   readTVar   tvar   = STM $ oneShot $ \k -> ReadTVar tvar k
   writeTVar  tvar x = STM $ oneShot $ \k -> WriteTVar tvar x (k ())
   retry             = STM $ oneShot $ \_ -> Retry
@@ -584,14 +586,14 @@ data SimEvent
   = SimEvent {
       seTime        :: !Time,
       seThreadId    :: !ThreadId,
-      seThreadLabel :: !(Maybe ThreadLabel),
+      seThreadLabel :: !(SMaybe ThreadLabel),
       seType        :: !SimEventType
     }
   | SimPOREvent {
       seTime        :: !Time,
       seThreadId    :: !ThreadId,
       seStep        :: !Int,
-      seThreadLabel :: !(Maybe ThreadLabel),
+      seThreadLabel :: !(SMaybe ThreadLabel),
       seType        :: !SimEventType
     }
   | SimRacesFound [ScheduleControl]
@@ -614,7 +616,7 @@ ppSimEvent timeWidth tidWidth tLabelWidth SimEvent {seTime, seThreadId, seThread
            threadLabel
            (show seType)
   where
-    threadLabel = fromMaybe "" seThreadLabel
+    threadLabel = Maybe.Strict.fromMaybe "" seThreadLabel
 ppSimEvent timeWidth tidWidth tLableWidth SimPOREvent {seTime, seThreadId, seStep, seThreadLabel, seType} =
     printf "%-*s - %-*s %-*s - %s"
            timeWidth
@@ -625,7 +627,7 @@ ppSimEvent timeWidth tidWidth tLableWidth SimPOREvent {seTime, seThreadId, seSte
            threadLabel
            (show seType)
   where
-    threadLabel = fromMaybe "" seThreadLabel
+    threadLabel = Maybe.Strict.fromMaybe "" seThreadLabel
 ppSimEvent _ _ _ (SimRacesFound controls) =
     "RacesFound "++show controls
 
@@ -702,7 +704,7 @@ ppDebug = appEndo
         . foldMap (Endo . Debug.trace . show)
         . Trace.toList
 
-pattern Trace :: Time -> ThreadId -> Maybe ThreadLabel -> SimEventType -> SimTrace a
+pattern Trace :: Time -> ThreadId -> SMaybe ThreadLabel -> SimEventType -> SimTrace a
               -> SimTrace a
 pattern Trace time threadId threadLabel traceEvent trace =
     Trace.Cons (SimEvent time threadId threadLabel traceEvent)
@@ -710,13 +712,13 @@ pattern Trace time threadId threadLabel traceEvent trace =
 
 {-# DEPRECATED Trace "Use 'SimTrace' instead." #-}
 
-pattern SimTrace :: Time -> ThreadId -> Maybe ThreadLabel -> SimEventType -> SimTrace a
+pattern SimTrace :: Time -> ThreadId -> SMaybe ThreadLabel -> SimEventType -> SimTrace a
                  -> SimTrace a
 pattern SimTrace time threadId threadLabel traceEvent trace =
     Trace.Cons (SimEvent time threadId threadLabel traceEvent)
                trace
 
-pattern SimPORTrace :: Time -> ThreadId -> Int -> Maybe ThreadLabel -> SimEventType -> SimTrace a
+pattern SimPORTrace :: Time -> ThreadId -> Int -> SMaybe ThreadLabel -> SimEventType -> SimTrace a
                     -> SimTrace a
 pattern SimPORTrace time threadId step threadLabel traceEvent trace =
     Trace.Cons (SimPOREvent time threadId step threadLabel traceEvent)
@@ -794,7 +796,7 @@ type TraceEvent = SimEventType
 
 data Labelled a = Labelled {
     l_labelled :: !a,
-    l_label    :: !(Maybe String)
+    l_label    :: !(SMaybe String)
   }
   deriving (Eq, Ord, Generic)
   deriving Show via Quiet (Labelled a)
