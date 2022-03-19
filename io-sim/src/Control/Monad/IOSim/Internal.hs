@@ -695,7 +695,7 @@ reschedule simstate@SimState{ threads, timers, curTime = time } =
     case removeMinimums timers of
       Nothing -> return (TraceDeadlock time (labelledThreads threads))
 
-      Just (tmids, time', fired, timers') -> assert (time' >= time) $ do
+      Just (tmids, !time', !fired, !timers') -> assert (time' >= time) $ do
 
         -- Reuse the STM functionality here to write all the timer TVars.
         -- Simplify to a special case that only reads and writes TVars.
@@ -705,8 +705,8 @@ reschedule simstate@SimState{ threads, timers, curTime = time } =
 
         let (unblocked,
              simstate') = unblockThreads wakeup simstate
-        trace <- reschedule simstate' { curTime = time'
-                                      , timers  = timers' }
+        !trace <- reschedule simstate' { curTime = time'
+                                       , timers  = timers' }
         return $
           traceMany ([ (time', ThreadId [-1], SJust "timer", EventTimerExpired tmid)
                      | tmid <- tmids ]
