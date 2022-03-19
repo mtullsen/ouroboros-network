@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP                        #-}
+{-# LANGUAGE BangPatterns               #-}
 {-# LANGUAGE DeriveGeneric              #-}
 {-# LANGUAGE DerivingStrategies         #-}
 {-# LANGUAGE DerivingVia                #-}
@@ -840,21 +841,21 @@ data StmStack s b a where
   AtomicallyFrame  :: StmStack s a a
 
   -- | Executing in the context of the /left/ hand side of an 'orElse'
-  OrElseLeftFrame  :: StmA s a                -- orElse right alternative
-                   -> (a -> StmA s b)         -- subsequent continuation
-                   -> Map TVarId (SomeTVar s) -- saved written vars set
-                   -> [SomeTVar s]            -- saved written vars list
-                   -> [SomeTVar s]            -- created vars list
-                   -> StmStack s b c
-                   -> StmStack s a c
+  OrElseLeftFrame  ::  StmA s a                   -- orElse right alternative
+                   ->  (a -> StmA s b)           -- subsequent continuation
+                   -> !(Map TVarId (SomeTVar s)) -- saved written vars set
+                   -> ![SomeTVar s]              -- saved written vars list
+                   -> ![SomeTVar s]              -- created vars list
+                   -> !(StmStack s b c)
+                   ->   StmStack s a c
 
   -- | Executing in the context of the /right/ hand side of an 'orElse'
-  OrElseRightFrame :: (a -> StmA s b)         -- subsequent continuation
-                   -> Map TVarId (SomeTVar s) -- saved written vars set
-                   -> [SomeTVar s]            -- saved written vars list
-                   -> [SomeTVar s]            -- created vars list
-                   -> StmStack s b c
-                   -> StmStack s a c
+  OrElseRightFrame ::  (a -> StmA s b)           -- subsequent continuation
+                   -> !(Map TVarId (SomeTVar s)) -- saved written vars set
+                   -> ![SomeTVar s]              -- saved written vars list
+                   -> ![SomeTVar s]              -- created vars list
+                   -> !(StmStack s b c)
+                   ->   StmStack s a c
 
 ---
 --- Schedules
