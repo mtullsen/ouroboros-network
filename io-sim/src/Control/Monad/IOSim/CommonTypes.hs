@@ -1,7 +1,6 @@
 {-# LANGUAGE GADTs                      #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
-{-# LANGUAGE StandaloneDeriving         #-}
 
 -- | Common types shared between `IOSim` and `IOSimPOR`.
 --
@@ -11,13 +10,20 @@ import           Control.Monad.Class.MonadSTM (TraceValue)
 import           Control.Monad.ST.Lazy
 
 import           Data.Function (on)
-import           Data.Map (Map)
+import           Data.Hashable (Hashable, hashWithSalt)
+import           Data.HashMap.Strict (HashMap)
 import           Data.Set (Set)
 import           Data.STRef.Lazy
 
 data ThreadId = RacyThreadId [Int]
               | ThreadId     [Int]    -- non racy threads have higher priority
   deriving (Eq, Ord, Show)
+
+instance Hashable ThreadId where
+    hashWithSalt s (RacyThreadId n) = s `hashWithSalt`
+                                      (0::Int) `hashWithSalt` n
+    hashWithSalt s (ThreadId n)     = s `hashWithSalt`
+                                      (1::Int) `hashWithSalt` n
 
 childThreadId :: ThreadId -> Int -> ThreadId
 childThreadId (RacyThreadId is) i = RacyThreadId (is ++ [i])
@@ -30,8 +36,8 @@ setRacyThread tid@RacyThreadId{} = tid
 
 newtype TVarId      = TVarId    Int   deriving (Eq, Ord, Enum, Show)
 newtype TimeoutId   = TimeoutId Int   deriving (Eq, Ord, Enum, Show)
-newtype ClockId     = ClockId   [Int] deriving (Eq, Ord, Show)
-newtype VectorClock = VectorClock { getVectorClock :: Map ThreadId Int }
+newtype ClockId     = ClockId   [Int] deriving (Eq, Ord, Show, Hashable)
+newtype VectorClock = VectorClock { getVectorClock :: HashMap ThreadId Int }
   deriving Show
 
 unTimeoutId :: TimeoutId -> Int

@@ -63,9 +63,11 @@ import qualified Data.List.Trace as Trace
 import           Data.Maybe (mapMaybe)
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
+import           Data.HashMap.Strict (HashMap)
+import qualified Data.HashMap.Strict as HashMap
 import           Data.OrdPSQ (OrdPSQ)
 import qualified Data.OrdPSQ as PSQ
-import           Data.Set (Set)
+import           Data.Set (Set, fromList)
 import qualified Data.Set as Set
 import           Data.Time (UTCTime (..), fromGregorian)
 
@@ -124,14 +126,14 @@ isNotRacyThreadId _            = False
 
 
 bottomVClock :: VectorClock
-bottomVClock = VectorClock Map.empty
+bottomVClock = VectorClock HashMap.empty
 
 insertVClock :: ThreadId -> Int -> VectorClock -> VectorClock
-insertVClock tid !step (VectorClock m) = VectorClock (Map.insert tid step m)
+insertVClock tid !step (VectorClock m) = VectorClock (HashMap.insert tid step m)
 
 leastUpperBoundVClock :: VectorClock -> VectorClock -> VectorClock
 leastUpperBoundVClock (VectorClock m) (VectorClock m') =
-    VectorClock (Map.unionWith max m m')
+    VectorClock (HashMap.unionWith max m m')
 
 -- hbfVClock :: VectorClock -> VectorClock -> Bool
 -- hbfVClock (VectorClock m) (VectorClock m') = Map.isSubmapOfBy (<=) m m'
@@ -141,18 +143,18 @@ happensBeforeStep :: Step -- ^ an earlier step
                   -> Bool
 happensBeforeStep step step' =
        Just (stepStep step)
-    <= Map.lookup (stepThreadId step)
-                  (getVectorClock $ stepVClock step')
+    <= HashMap.lookup (stepThreadId step)
+                      (getVectorClock $ stepVClock step')
 
 labelledTVarId :: TVar s a -> ST s (Labelled TVarId)
 labelledTVarId TVar { tvarId, tvarLabel } = Labelled tvarId <$> readSTRef tvarLabel
 
-labelledThreads :: Map ThreadId (Thread s a) -> [Labelled ThreadId]
+labelledThreads :: HashMap ThreadId (Thread s a) -> [Labelled ThreadId]
 labelledThreads threadMap =
     -- @Map.foldr'@ (and alikes) are not strict enough, to not retain the
     -- original thread map we need to evaluate the spine of the list.
     -- TODO: https://github.com/haskell/containers/issues/749
-    Map.foldr'
+    HashMap.foldr'
       (\Thread { threadId, threadLabel } !acc -> Labelled threadId threadLabel : acc)
       [] threadMap
 
@@ -169,13 +171,13 @@ data SimState s a = SimState {
        runqueue :: ![ThreadId],
        -- | All threads other than the currently running thread: both running
        -- and blocked threads.
-       threads  :: !(Map ThreadId (Thread s a)),
+       threads  :: !(HashMap ThreadId (Thread s a)),
        -- | current time
        curTime  :: !Time,
        -- | ordered list of timers
        timers   :: !(OrdPSQ TimeoutId Time (TimerVars s)),
        -- | list of clocks
-       clocks   :: !(Map ClockId UTCTime),
+       clocks   :: !(HashMap ClockId UTCTime),
        nextVid  :: !TVarId,     -- ^ next unused 'TVarId'
        nextTmid :: !TimeoutId,  -- ^ next unused 'TimeoutId'
        -- | previous steps (which we may race with).
@@ -194,10 +196,10 @@ initialState :: SimState s a
 initialState =
     SimState {
       runqueue = [],
-      threads  = Map.empty,
+      threads  = HashMap.empty,
       curTime  = Time 0,
       timers   = PSQ.empty,
-      clocks   = Map.singleton (ClockId []) epoch1970,
+      clocks   = HashMap.singleton (ClockId []) epoch1970,
       nextVid  = TVarId 0,
       nextTmid = TimeoutId 0,
       races    = noRaces,
@@ -212,18 +214,18 @@ invariant :: Maybe (Thread s a) -> SimState s a -> x -> x
 
 invariant (Just running) simstate@SimState{runqueue,threads,clocks} =
     assert (not (threadBlocked running))
-  . assert (threadId running `Map.notMember` threads)
+  . assert (not (threadId running `HashMap.member` threads))
   . assert (threadId running `List.notElem` runqueue)
-  . assert (threadClockId running `Map.member` clocks)
+  . assert (threadClockId running `HashMap.member` clocks)
   . invariant Nothing simstate
 
 invariant Nothing SimState{runqueue,threads,clocks} =
-    assert (all (`Map.member` threads) runqueue)
+    assert (all (`HashMap.member` threads) runqueue)
   . assert (and [ (threadBlocked t || threadDone t) == (threadId t `notElem` runqueue)
-                | t <- Map.elems threads ])
+                | t <- HashMap.elems threads ])
   . assert (and (zipWith (>) runqueue (drop 1 runqueue)))
-  . assert (and [ threadClockId t `Map.member` clocks
-                | t <- Map.elems threads ])
+  . assert (and [ threadClockId t `HashMap.member` clocks
+                | t <- HashMap.elems threads ])
 
 -- | Interpret the simulation monotonic time as a 'NominalDiffTime' since
 -- the start.
@@ -387,27 +389,27 @@ schedule thread@Thread{
 
     GetWallTime k -> do
       let clockid  = threadClockId thread
-          clockoff = clocks Map.! clockid
+          clockoff = clocks HashMap.! clockid
           walltime = timeSinceEpoch time `addUTCTime` clockoff
           thread'  = thread { threadControl = ThreadControl (k walltime) ctl }
       schedule thread' simstate
 
     SetWallTime walltime' k -> do
       let clockid   = threadClockId thread
-          clockoff  = clocks Map.! clockid
+          clockoff  = clocks HashMap.! clockid
           walltime  = timeSinceEpoch time `addUTCTime` clockoff
           clockoff' = addUTCTime (diffUTCTime walltime' walltime) clockoff
           thread'   = thread { threadControl = ThreadControl k ctl }
-          simstate' = simstate { clocks = Map.insert clockid clockoff' clocks }
+          simstate' = simstate { clocks = HashMap.insert clockid clockoff' clocks }
       schedule thread' simstate'
 
     UnshareClock k -> do
       let clockid   = threadClockId thread
-          clockoff  = clocks Map.! clockid
+          clockoff  = clocks HashMap.! clockid
           clockid'  = let ThreadId i = tid in ClockId i -- reuse the thread id
           thread'   = thread { threadControl = ThreadControl k ctl
                              , threadClockId = clockid' }
-          simstate' = simstate { clocks = Map.insert clockid' clockoff clocks }
+          simstate' = simstate { clocks = HashMap.insert clockid' clockoff clocks }
       schedule thread' simstate'
 
     -- we treat negative timers as cancelled ones; for the record we put
@@ -486,7 +488,7 @@ schedule thread@Thread{
                  [ (time, tid', (-1), tlbl', EventTxWakeup vids)
                  | tid' <- unblocked
                  , let tlbl' = lookupThreadLabel tid' threads
-                 , let Just vids = Set.toList <$> Map.lookup tid' wokeby ]
+                 , let Just vids = Set.toList <$> HashMap.lookup tid' wokeby ]
              $ SimPORTrace time tid tstep tlbl (EventDeschedule Yield)
              $ trace
 
@@ -519,7 +521,7 @@ schedule thread@Thread{
                             , threadEffect  = mempty
                             , threadRacy    = threadRacy thread
                             }
-          threads' = Map.insert tid' thread'' threads
+          threads' = HashMap.insert tid' thread'' threads
       -- A newly forked thread may have a higher priority, so we deschedule this one.
       trace <- deschedule Yield thread'
                  simstate { runqueue = insertThread thread'' runqueue
@@ -557,7 +559,7 @@ schedule thread@Thread{
               [ (time, tid', tstep, tlbl', EventTxWakeup vids')
               | tid' <- unblocked
               , let tlbl' = lookupThreadLabel tid' threads
-              , let Just vids' = Set.toList <$> Map.lookup tid' wokeby ] $
+              , let Just vids' = Set.toList <$> HashMap.lookup tid' wokeby ] $
             traceMany
               [ (time, tid, tstep, tlbl, EventLog tr)
               | tr <- tvarDynamicTraces
@@ -604,7 +606,7 @@ schedule thread@Thread{
 
     LabelThread tid' l k -> do
       let thread'  = thread { threadControl = ThreadControl k ctl }
-          threads' = Map.adjust (\t -> t { threadLabel = Just l }) tid' threads
+          threads' = HashMap.adjust (\t -> t { threadLabel = Just l }) tid' threads
       schedule thread' simstate { threads = threads' }
 
     ExploreRaces k -> do
@@ -654,7 +656,7 @@ schedule thread@Thread{
            willBlock) = (threadVClock t,
                          if threadBlocked t then wakeupEffects [tid'] else mempty,
                          not (threadInterruptible t || threadDone t))
-            where Just t = Map.lookup tid' threads
+            where Just t = HashMap.lookup tid' threads
 
       if willBlock
         then do
@@ -662,7 +664,7 @@ schedule thread@Thread{
           -- exception and the source thread id to the pending async exceptions.
           let adjustTarget t =
                 t { threadThrowTo = (e, Labelled tid tlbl, vClock) : threadThrowTo t }
-              threads'       = Map.adjust adjustTarget tid' threads
+              threads'       = HashMap.adjust adjustTarget tid' threads
           trace <- deschedule Blocked thread' simstate { threads = threads' }
           return $ SimPORTrace time tid tstep tlbl (EventThrowTo e tid')
                  $ SimPORTrace time tid tstep tlbl EventThrowToBlocked
@@ -684,7 +686,7 @@ schedule thread@Thread{
                   , threadVClock  = vClock' `leastUpperBoundVClock` vClock }
               simstate'@SimState { threads = threads' }
                          = snd (unblockThreads vClock [tid'] simstate)
-              threads''  = Map.adjust adjustTarget tid' threads'
+              threads''  = HashMap.adjust adjustTarget tid' threads'
               simstate'' = simstate' { threads = threads'' }
 
           -- We yield at this point because the target thread may be higher
@@ -713,7 +715,7 @@ deschedule Yield thread@Thread { threadId     = tid }
 
     let thread'   = stepThread thread
         runqueue' = insertThread thread' runqueue
-        threads'  = Map.insert tid thread' threads
+        threads'  = HashMap.insert tid thread' threads
         control'  = advanceControl (threadStepId thread) control in
     reschedule simstate { runqueue = runqueue', threads  = threads',
                           races    = updateRacesInSimState thread simstate,
@@ -770,7 +772,7 @@ deschedule Blocked thread@Thread { threadThrowTo = _ : _
 deschedule Blocked thread simstate@SimState{threads, control} =
     let thread1 = thread { threadBlocked = True }
         thread'  = stepThread $ thread1
-        threads' = Map.insert (threadId thread') thread' threads in
+        threads' = HashMap.insert (threadId thread') thread' threads in
     reschedule simstate { threads = threads',
                           races   = updateRacesInSimState thread1 simstate,
                           control = advanceControl (threadStepId thread1) control }
@@ -784,7 +786,7 @@ deschedule Terminated thread@Thread { threadId = tid, threadVClock = vClock }
         (unblocked,
          simstate'@SimState{threads}) =
                       unblockThreads vClock wakeup simstate
-        threads'    = Map.insert tid thread' threads
+        threads'    = HashMap.insert tid thread' threads
     -- We must keep terminated threads in the state to preserve their vector clocks,
     -- which matters when other threads throwTo them.
     trace <- reschedule simstate' { races = threadTerminatesRaces tid $
@@ -805,7 +807,7 @@ deschedule Sleep thread@Thread { threadId = tid }
     -- this one to sleep without recording a step.
 
     let runqueue' = insertThread thread runqueue
-        threads'  = Map.insert tid thread threads in
+        threads'  = HashMap.insert tid thread threads in
     reschedule simstate { runqueue = runqueue', threads  = threads' }
 
 
@@ -819,9 +821,9 @@ reschedule simstate@SimState{ runqueue, threads,
                               } =
     fmap (SimPORTrace time tid tstep Nothing (EventReschedule control)) $
     assert (tid `elem` runqueue) $
-    assert (tid `Map.member` threads) $
+    assert (tid `HashMap.member` threads) $
     invariant Nothing simstate $
-    let thread = threads Map.! tid in
+    let thread = threads HashMap.! tid in
     assert (threadId thread == tid) $
     --assert (threadStep thread == tstep) $
     if threadStep thread /= tstep then
@@ -832,16 +834,16 @@ reschedule simstate@SimState{ runqueue, threads,
            ++ "Thread:\n" ++ show thread ++ "\n"
     else
     schedule thread simstate { runqueue = List.delete tid runqueue
-                             , threads  = Map.delete tid threads }
+                             , threads  = HashMap.delete tid threads }
 
 -- When there is no current running thread but the runqueue is non-empty then
 -- schedule the next one to run.
 reschedule simstate@SimState{ runqueue = tid:runqueue', threads } =
     invariant Nothing simstate $
 
-    let thread = threads Map.! tid in
+    let thread = threads HashMap.! tid in
     schedule thread simstate { runqueue = runqueue'
-                             , threads  = Map.delete tid threads }
+                             , threads  = HashMap.delete tid threads }
 
 -- But when there are no runnable threads, we advance the time to the next
 -- timer event, or stop.
@@ -878,7 +880,7 @@ reschedule simstate@SimState{ runqueue = [], threads, timers, curTime = time, ra
                   ++ [ (time', tid', (-1), tlbl', EventTxWakeup vids)
                      | tid' <- unblocked
                      , let tlbl' = lookupThreadLabel tid' threads
-                     , let Just vids = Set.toList <$> Map.lookup tid' wokeby ]
+                     , let Just vids = Set.toList <$> HashMap.lookup tid' wokeby ]
         return $
           traceFinalRacesFound simstate $
           traceMany traceEntries trace
@@ -909,7 +911,7 @@ unblockThreads vClock wakeup simstate@SimState {runqueue, threads} =
     unblocked = [ thread
                 | tid <- wakeup
                 , thread <-
-                    case Map.lookup tid threads of
+                    case HashMap.lookup tid threads of
                       Just   Thread { threadDone    = True } -> [ ]
                       Just t@Thread { threadBlocked = True } -> [t]
                       _                                      -> [ ]
@@ -920,7 +922,7 @@ unblockThreads vClock wakeup simstate@SimState {runqueue, threads} =
 
     -- and in which case we mark them as now running
     threads'  = List.foldl'
-                  (flip (Map.adjust
+                  (flip (HashMap.adjust
                     (\t -> t { threadBlocked = False,
                                threadVClock = vClock `leastUpperBoundVClock` threadVClock t })))
                   threads unblockedIds
@@ -985,8 +987,8 @@ traceMany []                                   trace = trace
 traceMany ((time, tid, tstep, tlbl, event):ts) trace =
     SimPORTrace time tid tstep tlbl event (traceMany ts trace)
 
-lookupThreadLabel :: ThreadId -> Map ThreadId (Thread s a) -> Maybe ThreadLabel
-lookupThreadLabel tid threads = join (threadLabel <$> Map.lookup tid threads)
+lookupThreadLabel :: ThreadId -> HashMap ThreadId (Thread s a) -> Maybe ThreadLabel
+lookupThreadLabel tid threads = join (threadLabel <$> HashMap.lookup tid threads)
 
 
 -- | The most general method of running 'IOSim' is in 'ST' monad.  One can
@@ -1309,7 +1311,7 @@ unblockAllThreadsFromTVar TVar{tvarBlocked} = do
 -- the var writes that woke them.
 --
 threadsUnblockedByWrites :: [SomeTVar s]
-                         -> ST s ([ThreadId], Map ThreadId (Set (Labelled TVarId)))
+                         -> ST s ([ThreadId], HashMap ThreadId (Set (Labelled TVarId)))
 threadsUnblockedByWrites written = do
   tidss <- sequence
              [ (,) <$> labelledTVarId tvar <*> readTVarBlockedThreads tvar
@@ -1319,10 +1321,10 @@ threadsUnblockedByWrites written = do
   -- We reverse the individual lists because the tvarBlocked is used as a stack
   -- so it is in order of last written, LIFO, and we want FIFO behaviour.
   let wakeup = ordNub [ tid | (_vid, tids) <- tidss, tid <- reverse tids ]
-      wokeby = Map.fromListWith Set.union
-                                [ (tid, Set.singleton vid)
-                                | (vid, tids) <- tidss
-                                , tid <- tids ]
+      wokeby = HashMap.fromListWith Set.union
+                                    [ (tid, Set.singleton vid)
+                                    | (vid, tids) <- tidss
+                                    , tid <- tids ]
   return (wakeup, wokeby)
 
 ordNub :: Ord a => [a] -> [a]
@@ -1415,10 +1417,11 @@ updateRacesInSimState thread SimState{ control, threads, races } =
     updateRaces step
                 (threadBlocked thread)
                 control
-                (Map.keysSet (Map.filter (\t -> not (threadDone t)
-                                             && threadId t `Set.notMember`
-                                                effectForks (stepEffect step)
-                                         ) threads))
+                (fromList
+                  (HashMap.keys (HashMap.filter (\t -> not (threadDone t)
+                                                    && threadId t `Set.notMember`
+                                                       effectForks (stepEffect step)
+                                                ) threads)))
                 races
   where
     step = currentStep thread
@@ -1595,7 +1598,7 @@ stepInfoToScheduleMods
   -- It is actually possible for a later step that races with an earlier one
   -- not to *depend* on it in a happens-before sense. But we don't want to try
   -- to follow any steps *after* the later one.
-  [ ScheduleMod 
+  [ ScheduleMod
       { scheduleModTarget    = stepStepId step
       , scheduleModControl   = control
       , scheduleModInsertion = takeWhile (/=stepStepId step')

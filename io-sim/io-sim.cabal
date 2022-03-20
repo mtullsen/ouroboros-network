@@ -52,6 +52,8 @@ library
                        io-classes        >=0.2 && <0.3,
                        exceptions        >=0.10,
                        containers,
+                       unordered-containers,
+                       hashable,
                        deque,
                        parallel,
                        pretty-simple,
