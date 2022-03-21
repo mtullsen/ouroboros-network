@@ -640,7 +640,7 @@ deschedule Interruptable !thread !simstate =
     schedule thread simstate
 
 deschedule Blocked !thread@Thread { threadThrowTo = _ : _
-                                  , threadMasking = maskst } simstate
+                                  , threadMasking = maskst } !simstate
     | maskst /= MaskedUninterruptible =
     -- We're doing a blocking operation, which is an interrupt point even if
     -- we have async exceptions masked, and there are pending blocked async
@@ -687,7 +687,7 @@ reschedule !simstate@SimState{ runqueue, threads }
 
 -- But when there are no runnable threads, we advance the time to the next
 -- timer event, or stop.
-reschedule simstate@SimState{ threads, timers, curTime = time } =
+reschedule !simstate@SimState{ threads, timers, curTime = time } =
     {-# SCC "reschedule.Nothing" #-}
     assert (invariant Nothing simstate) $
 
