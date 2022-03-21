@@ -394,37 +394,37 @@ schedule !thread@Thread{
       schedule thread' simstate
 
     GetWallTime k -> do
-      let clockid  = threadClockId thread
-          clockoff = clocks HashMap.! clockid
-          walltime = timeSinceEpoch time `addUTCTime` clockoff
-          thread'  = thread { threadControl = ThreadControl (k walltime) ctl }
+      let !clockid  = threadClockId thread
+          !clockoff = clocks HashMap.! clockid
+          !walltime = timeSinceEpoch time `addUTCTime` clockoff
+          !thread'  = thread { threadControl = ThreadControl (k walltime) ctl }
       schedule thread' simstate
 
     SetWallTime walltime' k -> do
-      let clockid   = threadClockId thread
-          clockoff  = clocks HashMap.! clockid
-          walltime  = timeSinceEpoch time `addUTCTime` clockoff
-          clockoff' = addUTCTime (diffUTCTime walltime' walltime) clockoff
-          thread'   = thread { threadControl = ThreadControl k ctl }
-          simstate' = simstate { clocks = HashMap.insert clockid clockoff' clocks }
+      let !clockid   = threadClockId thread
+          !clockoff  = clocks HashMap.! clockid
+          !walltime  = timeSinceEpoch time `addUTCTime` clockoff
+          !clockoff' = addUTCTime (diffUTCTime walltime' walltime) clockoff
+          !thread'   = thread { threadControl = ThreadControl k ctl }
+          !simstate' = simstate { clocks = HashMap.insert clockid clockoff' clocks }
       schedule thread' simstate'
 
     UnshareClock k -> do
-      let clockid   = threadClockId thread
-          clockoff  = clocks HashMap.! clockid
-          clockid'  = let ThreadId i = tid in ClockId i -- reuse the thread id
-          thread'   = thread { threadControl = ThreadControl k ctl
-                             , threadClockId = clockid' }
-          simstate' = simstate { clocks = HashMap.insert clockid' clockoff clocks }
+      let !clockid   = threadClockId thread
+          !clockoff  = clocks HashMap.! clockid
+          !clockid'  = let ThreadId i = tid in ClockId i -- reuse the thread id
+          !thread'   = thread { threadControl = ThreadControl k ctl
+                              , threadClockId = clockid' }
+          !simstate' = simstate { clocks = HashMap.insert clockid' clockoff clocks }
       schedule thread' simstate'
 
     -- we treat negative timers as cancelled ones; for the record we put
     -- `EventTimerCreated` and `EventTimerCancelled` in the trace; This differs
     -- from `GHC.Event` behaviour.
     NewTimeout d k | d < 0 -> do
-      let t       = NegativeTimeout nextTmid
-          expiry  = d `addTime` time
-          thread' = thread { threadControl = ThreadControl (k t) ctl }
+      let !t       = NegativeTimeout nextTmid
+          !expiry  = d `addTime` time
+          !thread' = thread { threadControl = ThreadControl (k t) ctl }
       trace <- schedule thread' simstate { nextTmid = succ nextTmid }
       return (SimPORTrace time tid tstep tlbl (EventTimerCreated nextTmid nextVid expiry) $
               SimPORTrace time tid tstep tlbl (EventTimerCancelled nextTmid) $
@@ -439,10 +439,10 @@ schedule !thread@Thread{
                             (SJust $ "<<timeout " ++ show (unTimeoutId nextTmid) ++ ">>")
                              False
       !_ <- modifySTRef (tvarVClock tvar') (leastUpperBoundVClock vClock)
-      let expiry  = d `addTime` time
-          t       = Timeout tvar tvar' nextTmid
-          timers' = PSQ.insert nextTmid expiry (TimerVars tvar tvar') timers
-          thread' = thread { threadControl = ThreadControl (k t) ctl }
+      let !expiry  = d `addTime` time
+          !t       = Timeout tvar tvar' nextTmid
+          !timers' = PSQ.insert nextTmid expiry (TimerVars tvar tvar') timers
+          !thread' = thread { threadControl = ThreadControl (k t) ctl }
       trace <- schedule thread' simstate { timers   = timers'
                                          , nextVid  = succ (succ nextVid)
                                          , nextTmid = succ nextTmid }
@@ -451,8 +451,8 @@ schedule !thread@Thread{
     -- we do not follow `GHC.Event` behaviour here; updating a timer to the past
     -- effectively cancels it.
     UpdateTimeout (Timeout _tvar _tvar' tmid) d k | d < 0 -> do
-      let timers' = PSQ.delete tmid timers
-          thread' = thread { threadControl = ThreadControl k ctl }
+      let !timers' = PSQ.delete tmid timers
+          !thread' = thread { threadControl = ThreadControl k ctl }
       trace <- schedule thread' simstate { timers = timers' }
       return (SimPORTrace time tid tstep tlbl (EventTimerCancelled tmid) trace)
 
@@ -461,9 +461,9 @@ schedule !thread@Thread{
           -- to race using a timeout with updating or cancelling it
       let updateTimeout_  Nothing       = ((), Nothing)
           updateTimeout_ (Just (_p, v)) = ((), Just (expiry, v))
-          expiry  = d `addTime` time
-          timers' = snd (PSQ.alter updateTimeout_ tmid timers)
-          thread' = thread { threadControl = ThreadControl k ctl }
+          !expiry  = d `addTime` time
+          !timers' = snd (PSQ.alter updateTimeout_ tmid timers)
+          !thread' = thread { threadControl = ThreadControl k ctl }
       trace <- schedule thread' simstate { timers = timers' }
       return (SimPORTrace time tid tstep tlbl (EventTimerUpdated tmid expiry) trace)
 
@@ -473,7 +473,7 @@ schedule !thread@Thread{
       schedule thread' simstate
 
     CancelTimeout (Timeout tvar tvar' tmid) k -> do
-      let timers' = PSQ.delete tmid timers
+      let !timers' = PSQ.delete tmid timers
       !written <- execAtomically' (runSTM $ writeTVar tvar TimeoutCancelled)
       (!wakeup, wokeby) <- threadsUnblockedByWrites written
       mapM_ (\(SomeTVar var) -> unblockAllThreadsFromTVar var) written
@@ -505,29 +505,29 @@ schedule !thread@Thread{
       schedule thread' simstate
 
     Fork a k -> do
-      let nextTId = threadNextTId thread
-          tid' | threadRacy thread = setRacyThread $ childThreadId tid nextTId
-               | otherwise         = childThreadId tid nextTId
-          thread'  = thread { threadControl = ThreadControl (k tid') ctl,
-                              threadNextTId = nextTId + 1,
-                              threadEffect  = effect <> forkEffect tid' }
-          thread'' = Thread { threadId      = tid'
-                            , threadControl = ThreadControl (runIOSim a)
-                                                            ForkFrame
-                            , threadBlocked = False
-                            , threadDone    = False
-                            , threadMasking = threadMasking thread
-                            , threadThrowTo = []
-                            , threadClockId = threadClockId thread
-                            , threadLabel   = SNothing
-                            , threadNextTId = 1
-                            , threadStep    = 0
-                            , threadVClock  = insertVClock tid' 0
-                                            $ vClock
-                            , threadEffect  = mempty
-                            , threadRacy    = threadRacy thread
-                            }
-          threads' = HashMap.insert tid' thread'' threads
+      let !nextTId = threadNextTId thread
+          !tid' | threadRacy thread = setRacyThread $ childThreadId tid nextTId
+                | otherwise         = childThreadId tid nextTId
+          !thread'  = thread { threadControl = ThreadControl (k tid') ctl,
+                               threadNextTId = nextTId + 1,
+                               threadEffect  = effect <> forkEffect tid' }
+          !thread'' = Thread { threadId      = tid'
+                             , threadControl = ThreadControl (runIOSim a)
+                                                             ForkFrame
+                             , threadBlocked = False
+                             , threadDone    = False
+                             , threadMasking = threadMasking thread
+                             , threadThrowTo = []
+                             , threadClockId = threadClockId thread
+                             , threadLabel   = SNothing
+                             , threadNextTId = 1
+                             , threadStep    = 0
+                             , threadVClock  = insertVClock tid' 0
+                                             $ vClock
+                             , threadEffect  = mempty
+                             , threadRacy    = threadRacy thread
+                             }
+          !threads' = HashMap.insert tid' thread'' threads
       -- A newly forked thread may have a higher priority, so we deschedule this one.
       trace <- deschedule Yield thread'
                  simstate { runqueue = insertThread thread'' runqueue
