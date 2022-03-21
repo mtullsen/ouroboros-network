@@ -167,11 +167,12 @@ labelledThreads threadMap =
 --
 data TimerVars s = TimerVars !(TVar s TimeoutState) !(TVar s Bool)
 
+type RunQueue = OrdPSQ (Down ThreadId) (Down ThreadId) ()
 
 -- | Internal state.
 --
 data SimState s a = SimState {
-       runqueue :: ![ThreadId],
+       runqueue :: !RunQueue,
        -- | All threads other than the currently running thread: both running
        -- and blocked threads.
        threads  :: !(HashMap ThreadId (Thread s a)),
@@ -198,7 +199,7 @@ data SimState s a = SimState {
 initialState :: SimState s a
 initialState =
     SimState {
-      runqueue = [],
+      runqueue = PSQ.empty,
       threads  = HashMap.empty,
       curTime  = Time 0,
       timers   = PSQ.empty,
@@ -218,15 +219,17 @@ invariant :: Maybe (Thread s a) -> SimState s a -> x -> x
 invariant (Just running) simstate@SimState{runqueue,threads,clocks} =
     assert (not (threadBlocked running))
   . assert (not (threadId running `HashMap.member` threads))
-  . assert (threadId running `List.notElem` runqueue)
+  . assert (not (Down (threadId running) `PSQ.member` runqueue))
   . assert (threadClockId running `HashMap.member` clocks)
   . invariant Nothing simstate
 
 invariant Nothing SimState{runqueue,threads,clocks} =
-    assert (all (`HashMap.member` threads) runqueue)
-  . assert (and [ (threadBlocked t || threadDone t) == (threadId t `notElem` runqueue)
+    assert (PSQ.fold' (\(Down tid) _ _ a -> tid `HashMap.member` threads && a) True runqueue)
+  . assert (and [ (threadBlocked t || threadDone t) == not (Down (threadId t) `PSQ.member` runqueue)
                 | t <- HashMap.elems threads ])
-  . assert (and (zipWith (>) runqueue (drop 1 runqueue)))
+  . assert (and (zipWith (\(Down tid, _, _) (Down tid', _, _) -> tid > tid')
+                         (PSQ.toList runqueue)
+                         (drop 1 (PSQ.toList runqueue))))
   . assert (and [ threadClockId t `HashMap.member` clocks
                 | t <- HashMap.elems threads ])
 
@@ -238,8 +241,8 @@ timeSinceEpoch (Time t) = fromRational (toRational t)
 
 -- | Insert thread into `runqueue`.
 --
-insertThread :: Thread s a -> [ThreadId] -> [ThreadId]
-insertThread t = List.insertBy (comparing Down) (threadId t)
+insertThread :: Thread s a -> RunQueue -> RunQueue
+insertThread Thread { threadId } = PSQ.insert (Down threadId) (Down threadId) ()
 
 
 -- | Schedule / run a thread.
@@ -823,7 +826,7 @@ reschedule simstate@SimState{ runqueue, threads,
                               curTime=time
                               } =
     fmap (SimPORTrace time tid tstep SNothing (EventReschedule control)) $
-    assert (tid `elem` runqueue) $
+    assert (Down tid `PSQ.member` runqueue) $
     assert (tid `HashMap.member` threads) $
     invariant Nothing simstate $
     let thread = threads HashMap.! tid in
@@ -836,12 +839,13 @@ reschedule simstate@SimState{ runqueue, threads,
            ++ "  actual step: "++show (threadStep thread)++"\n"
            ++ "Thread:\n" ++ show thread ++ "\n"
     else
-    schedule thread simstate { runqueue = List.delete tid runqueue
+    schedule thread simstate { runqueue = PSQ.delete (Down tid) runqueue
                              , threads  = HashMap.delete tid threads }
 
 -- When there is no current running thread but the runqueue is non-empty then
 -- schedule the next one to run.
-reschedule simstate@SimState{ runqueue = tid:runqueue', threads } =
+reschedule simstate@SimState{ runqueue, threads }
+    | Just (Down tid, _, _, runqueue') <- PSQ.minView runqueue =
     invariant Nothing simstate $
 
     let thread = threads HashMap.! tid in
@@ -850,7 +854,7 @@ reschedule simstate@SimState{ runqueue = tid:runqueue', threads } =
 
 -- But when there are no runnable threads, we advance the time to the next
 -- timer event, or stop.
-reschedule simstate@SimState{ runqueue = [], threads, timers, curTime = time, races } =
+reschedule simstate@SimState{ threads, timers, curTime = time, races } =
     invariant Nothing simstate $
 
     -- time is moving on
