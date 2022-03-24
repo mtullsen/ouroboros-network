@@ -84,7 +84,7 @@ newControlChannel = do
     -- connection manager (when it included an outbound duplex connection).
     channel <-
       atomically $
-        newTBQueue 10
+        newTBQueue 10                             -- G-FIXME[R]: magic number
         >>= \q -> labelTBQueue q "server-cc" $> q
     pure $ ControlChannel {
         readMessage  = readMessage channel,
