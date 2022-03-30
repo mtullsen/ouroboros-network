@@ -766,7 +766,6 @@ snapshotFromPath fileName = do
 takeSnapshot ::
      forall m blk.
      ( MonadThrow m
-     , IsLedger (LedgerState blk)
      , LedgerSupportsProtocol blk
      )
   => Tracer m (TraceEvent blk)

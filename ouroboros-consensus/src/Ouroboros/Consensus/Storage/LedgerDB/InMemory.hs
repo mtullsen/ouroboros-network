@@ -158,8 +158,8 @@ import           Ouroboros.Consensus.Util.Versioned
 -- > L3 |> []
 type LegacyLedgerDB l = AnchoredSeq
                                (WithOrigin SlotNo)
-                               (Checkpoint (l ValuesMK))
-                               (Checkpoint (l ValuesMK))
+                               (Checkpoint (l EmptyMK))
+                               (Checkpoint (l EmptyMK))
 
 -- | Type alias for the new-style database
 --
@@ -226,10 +226,10 @@ newtype Checkpoint l = Checkpoint {
     }
   deriving (Generic)
 
-deriving instance          Eq       (l ValuesMK) => Eq       (Checkpoint (l ValuesMK))
-deriving anyclass instance NoThunks (l ValuesMK) => NoThunks (Checkpoint (l ValuesMK))
+deriving instance          Eq       (l EmptyMK) => Eq       (Checkpoint (l EmptyMK))
+deriving anyclass instance NoThunks (l EmptyMK) => NoThunks (Checkpoint (l EmptyMK))
 
-instance ShowLedgerState l => Show (Checkpoint (l ValuesMK)) where
+instance ShowLedgerState l => Show (Checkpoint (l EmptyMK)) where
   showsPrec p (Checkpoint l) =
         showParen (p > 10)
       $ showString "Checkpoint " . showsLedgerState sMapKind l
@@ -250,14 +250,13 @@ instance GetTip (l EmptyMK) => Anchorable (WithOrigin SlotNo) (Checkpoint (l Emp
 ledgerDbWithAnchor ::
      ( TableStuff l
      , GetTip (l EmptyMK)
-     , GetTip (l ValuesMK)
      , StowableLedgerTables l
      , HasCallStack
      )
   => RunAlsoLegacy -> l EmptyMK -> LedgerDB l
 ledgerDbWithAnchor runAlsoLegacy anchor = LedgerDB {
     ledgerDbCheckpoints = case (isCandidateForUnstow anchor, runAlsoLegacy) of
-        (True , RunBoth) -> Just (Empty (Checkpoint (unstowLedgerTables anchor)))
+        (True , RunBoth) -> Just (Empty (Checkpoint anchor))
         (False, RunBoth) -> error "Requested to run with legacy DB but anchor loaded from disk has no in-mem UTxO"
         _                -> Nothing
     , ledgerDbChangelog   = emptyDbChangeLog anchor
@@ -449,7 +448,7 @@ applyBlock cfg ap db = case ap of
     _modernLs = ledgerDbCurrent db
 
     legacyLs :: Maybe (l ValuesMK)
-    legacyLs = ledgerDbCurrentValues db
+    legacyLs = unstowLedgerTables <$> ledgerDbCurrentValues db
 
     legacyApplyBlock :: l ValuesMK -> Ap m l blk c -> m (l TrackingMK)
     legacyApplyBlock legLs = \case
@@ -661,7 +660,7 @@ defaultReadKeySets f dbReader = runReaderT (runDbReader dbReader) f
 -- | The ledger state at the tip of the chain
 --
 -- TODO This won't work if @not 'runDual'@.
-ledgerDbCurrentValues :: GetTip (l ValuesMK) => LedgerDB l -> Maybe (l ValuesMK)
+ledgerDbCurrentValues :: GetTip (l EmptyMK) => LedgerDB l -> Maybe (l EmptyMK)
 ledgerDbCurrentValues =
   fmap (either unCheckpoint unCheckpoint
         . AS.head)
@@ -705,11 +704,10 @@ ledgerDbAnchor =
 ledgerDbOldest :: forall l.
      ( StandardHash (l EmptyMK)
      , GetTip (l EmptyMK)
-     , StowableLedgerTables l
      )
   => LedgerDB l -> l EmptyMK
 ledgerDbOldest db =
-    case stuffedLegacyAnchor of
+    case legacyAnchor of
       Nothing  -> immAnchor
       Just sla -> Exn.assert (isFlushed sla) sla
   where
@@ -723,10 +721,10 @@ ledgerDbOldest db =
     isFlushed :: l EmptyMK -> Bool
     isFlushed sla = castPoint (getTip sla) == getTip immAnchor
 
-    stuffedLegacyAnchor :: Maybe (l EmptyMK)
-    stuffedLegacyAnchor = stowLedgerTables <$> legacyAnchor
+    -- stuffedLegacyAnchor :: Maybe (l EmptyMK)
+    -- stuffedLegacyAnchor = stowLedgerTables <$> legacyAnchor
 
-    legacyAnchor :: Maybe (l ValuesMK)
+    legacyAnchor :: Maybe (l EmptyMK)
     legacyAnchor =
           unCheckpoint
       .   AS.anchor
@@ -745,7 +743,7 @@ ledgerDbSnapshots LedgerDB{..} = case ledgerDbCheckpoints of
     $ AS.toNewestFirst legacyDb <> [AS.anchor legacyDb]
 
 -- | How many blocks can we currently roll back?
-ledgerDbMaxRollback :: (GetTip (l ValuesMK), GetTip (l EmptyMK)) => LedgerDB l -> Word64
+ledgerDbMaxRollback :: (GetTip (l EmptyMK)) =>LedgerDB l -> Word64
 ledgerDbMaxRollback LedgerDB{..} =
   let
     old = fromIntegral . AS.length <$> ledgerDbCheckpoints
@@ -827,7 +825,7 @@ ledgerDbBimap f g =
 -- | Prune snapshots until at we have at most @k@ snapshots in the LedgerDB,
 -- excluding the snapshots stored at the anchor.
 ledgerDbPrune ::
-     (GetTip (l EmptyMK), GetTip (l ValuesMK))
+     (GetTip (l EmptyMK))
   => SecurityParam -> LedgerDB l -> LedgerDB l
 ledgerDbPrune k db = db {
       ledgerDbCheckpoints =
@@ -852,7 +850,7 @@ pushLedgerState ::
   -> LedgerDB l -> LedgerDB l
 pushLedgerState secParam (currentOld', currentNew') db@LedgerDB{..}  =
     ledgerDbPrune secParam $ db {
-        ledgerDbCheckpoints = (AS.:>) <$> ledgerDbCheckpoints <*> (Checkpoint <$> currentOld')
+        ledgerDbCheckpoints = (AS.:>) <$> ledgerDbCheckpoints <*> (Checkpoint . stowLedgerTables <$> currentOld')
       , ledgerDbChangelog   =
           extendDbChangelog
             ledgerDbChangelog
