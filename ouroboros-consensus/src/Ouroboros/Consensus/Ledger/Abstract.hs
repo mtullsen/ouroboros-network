@@ -43,6 +43,9 @@ import           Ouroboros.Consensus.Block.Abstract
 import           Ouroboros.Consensus.Ledger.Basics
 import           Ouroboros.Consensus.Ticked
 import           Ouroboros.Consensus.Util (repeatedly, repeatedlyM, (..:))
+import qualified Debug.Trace as TRACE
+import qualified Data.Map.Strict as Map
+import Ouroboros.Consensus.Storage.LedgerDB.HD (UtxoDiff(..), UtxoValues (UtxoValues))
 
 -- | " Validated " transaction or block
 --
@@ -150,7 +153,7 @@ tickThenApplyLedgerResult ::
   -> Except (LedgerErr l) (LedgerResult l (l TrackingMK))
 tickThenApplyLedgerResult cfg blk l = do
   let lrTick = applyChainTickLedgerResult cfg (blockSlot blk) (forgetLedgerStateTables l)
-  lrBlock <-    applyBlockLedgerResult     cfg            blk  (mappendValuesTicked (projectLedgerTables l) $ lrResult lrTick)
+  lrBlock <-   applyBlockLedgerResult     cfg            blk  (mappendValuesTicked (projectLedgerTables l) $ lrResult lrTick)
   let tickDiffs = zipLedgerTables calculateDifference (projectLedgerTables l)
                 . projectLedgerTablesTicked
                 . lrResult
@@ -170,12 +173,13 @@ tickThenReapplyLedgerResult cfg blk l =
   let lrTick    = applyChainTickLedgerResult cfg (blockSlot blk) (forgetLedgerStateTables l)
       lrBlock   = reapplyBlockLedgerResult   cfg            blk  (mappendValuesTicked (projectLedgerTables l) $ lrResult lrTick)
       tickDiffs = zipLedgerTables calculateDifference (projectLedgerTables l)
+                . mapLedgerTables (\tbs@(ApplyValuesMK (UtxoValues m)) -> TRACE.trace ("ticked values: " <> show (Map.size m)) tbs)
                 . projectLedgerTablesTicked
                 . lrResult
                 $ lrTick
-  in LedgerResult {
+  in TRACE.trace (show $ blockSlot blk) $ LedgerResult {
       lrEvents = lrEvents lrTick <> lrEvents lrBlock
-    , lrResult = mappendTracking tickDiffs $ lrResult lrBlock
+    , lrResult = mappendTracking (mapLedgerTables (\tbs@(ApplyTrackingMK _ (UtxoDiff m)) -> TRACE.trace ("tick " <> show (Map.size m)) tbs) tickDiffs) $ lrResult lrBlock
     }
 
 tickThenApply ::

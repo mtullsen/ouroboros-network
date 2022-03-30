@@ -112,6 +112,8 @@ import           Ouroboros.Consensus.Storage.LedgerDB.Types (PushGoal (..),
 import           Ouroboros.Consensus.Util
 import           Ouroboros.Consensus.Util.CBOR (decodeWithOrigin)
 import           Ouroboros.Consensus.Util.Versioned
+import qualified Debug.Trace as TRACE
+import qualified Data.Map.Strict as Map
 
 {-------------------------------------------------------------------------------
   Ledger DB types
@@ -435,7 +437,8 @@ applyBlock cfg ap db = case ap of
               Just (legLs', legDiff, legValues) -> [
                   annihilate              legLs' == annihilate              modernLs'
                 , forgetLedgerStateTables legLs' == forgetLedgerStateTables modernLs'
-                , modernDiff                     == legDiff
+                , mapLedgerTables (\tbs@(ApplyDiffMK (UtxoDiff m)) -> TRACE.trace ("modern " <> show (Map.size m)) tbs) modernDiff
+                  == mapLedgerTables (\tbs@(ApplyDiffMK (UtxoDiff m)) -> TRACE.trace ("legacy " <> show (Map.size m)) tbs) legDiff
                 , asTypeOf True $ idViaLegacy legValues     == mixViaLegacy modernDiff
                 ]
               _ -> [True]
@@ -865,8 +868,8 @@ pushLedgerState secParam (currentOld', currentNew') db@LedgerDB{..}  =
 --
 -- Returns 'Nothing' if maximum rollback is exceeded.
 rollback :: forall l.
-     (GetTip (l ValuesMK), GetTip (l EmptyMK), TableStuff l)
-  => Word64 -> LedgerDB l -> Maybe (LedgerDB l)
+     ( GetTip (l EmptyMK), TableStuff l)
+  =>Word64 -> LedgerDB l -> Maybe (LedgerDB l)
 rollback n db@LedgerDB{..}
     | n <= ledgerDbMaxRollback db
     = Just db {

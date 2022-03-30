@@ -59,6 +59,7 @@ import qualified Ouroboros.Consensus.HardFork.Combinator.Util.Telescope as Teles
 import           Ouroboros.Consensus.HardFork.Combinator.State.Infra as X
 import           Ouroboros.Consensus.HardFork.Combinator.State.Instances as X ()
 import           Ouroboros.Consensus.HardFork.Combinator.State.Types as X
+import qualified Debug.Trace as TRACE
 
 {-------------------------------------------------------------------------------
   GetTip
@@ -184,7 +185,7 @@ extendToSlot ledgerCfg@HardForkLedgerConfig{..} slot ledgerSt@(HardForkState st)
     . Telescope.extend
         ( InPairs.hcmap proxySingle (\f -> Require $ \(K t)
                                         -> Extend  $ \cur
-                                        -> I $ howExtend f t cur)
+                                        -> I $ TRACE.trace "extend" $ howExtend f t cur)
         $ translate
         )
         (hczipWith
