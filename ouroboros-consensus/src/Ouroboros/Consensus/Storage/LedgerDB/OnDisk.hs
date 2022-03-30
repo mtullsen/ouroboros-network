@@ -343,7 +343,7 @@ data InitFailure blk =
 initLedgerDB ::
      forall m blk. (
          IOLike m
-       , LedgerSupportsProtocol blk
+       , LedgerSupportsProtocolHD blk
        , InspectLedger blk
        , HasCallStack
        , SufficientSerializationForAnyBackingStore (ExtLedgerState blk))
@@ -450,7 +450,7 @@ initLedgerDB replayTracer
 replayStartingWith ::
      forall m blk. (
          IOLike m
-       , LedgerSupportsProtocol blk
+       , LedgerSupportsProtocolHD blk
        , InspectLedger blk
        , HasCallStack
        )

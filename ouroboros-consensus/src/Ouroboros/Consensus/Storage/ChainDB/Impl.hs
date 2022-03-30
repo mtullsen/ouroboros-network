@@ -82,7 +82,7 @@ import Ouroboros.Consensus.Storage.LedgerDB.InMemory (RunAlsoLegacy(..))
 withDB
   :: forall m blk a.
      ( IOLike m
-     , LedgerSupportsProtocol blk
+     , LedgerSupportsProtocolHD blk
      , InspectLedger blk
      , HasHardForkHistory blk
      , ConvertRawHash blk
@@ -96,7 +96,7 @@ withDB args = bracket (fst <$> openDBInternal args True) API.closeDB
 openDB
   :: forall m blk.
      ( IOLike m
-     , LedgerSupportsProtocol blk
+     , LedgerSupportsProtocolHD blk
      , InspectLedger blk
      , HasHardForkHistory blk
      , ConvertRawHash blk
@@ -109,7 +109,7 @@ openDB args = fst <$> openDBInternal args True
 openDBInternal
   :: forall m blk.
      ( IOLike m
-     , LedgerSupportsProtocol blk
+     , LedgerSupportsProtocolHD blk
      , InspectLedger blk
      , HasHardForkHistory blk
      , ConvertRawHash blk

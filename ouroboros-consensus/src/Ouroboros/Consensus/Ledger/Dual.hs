@@ -352,6 +352,8 @@ data instance Ticked1 (LedgerState (DualBlock m a)) mk = TickedDualLedgerState {
     }
   deriving NoThunks via AllowThunk (Ticked1 (LedgerState (DualBlock m a)) mk)
 
+instance Bridge m a => IsLedgerHD (LedgerState (DualBlock m a)) where
+
 instance Bridge m a => IsLedger (LedgerState (DualBlock m a)) where
   type LedgerErr (LedgerState (DualBlock m a)) = DualLedgerError   m a
 
@@ -469,50 +471,52 @@ instance ShowLedgerState (LedgerTables (LedgerState (DualBlock m a))) where
 instance ShowLedgerState (LedgerTables (Ticked1 (LedgerState (DualBlock m a)))) where
   showsLedgerState = error "showsLedgerState @Ticked1 LedgerTables DualBlock"
 
+instance (IsLedgerHD (LedgerState (DualBlock m a)), Bridge m a) => ApplyBlockHD (LedgerState (DualBlock m a)) (DualBlock m a) where
+
 instance Bridge m a => ApplyBlock (LedgerState (DualBlock m a)) (DualBlock m a) where
 
   applyBlockLedgerResult cfg
                          block@DualBlock{..}
-                         TickedDualLedgerState{..} = do
-      (ledgerResult, aux') <-
-        agreeOnError DualLedgerError (
-            applyBlockLedgerResult
-              (dualLedgerConfigMain cfg)
-              dualBlockMain
-              tickedDualLedgerStateMain
-          , applyMaybeBlock
-              (dualLedgerConfigAux cfg)
-              dualBlockAux
-              tickedDualLedgerStateAux
-              tickedDualLedgerStateAuxOrig
-          )
-      return $ castLedgerResult ledgerResult <&> \main' -> DualLedgerState {
-          dualLedgerStateMain   = main'
-        , dualLedgerStateAux    = aux'
-        , dualLedgerStateBridge = updateBridgeWithBlock
-                                    block
-                                    tickedDualLedgerStateBridge
-        }
+                         TickedDualLedgerState{..} = undefined -- do
+      -- (ledgerResult, aux') <-
+      --   agreeOnError DualLedgerError (
+      --       applyBlockLedgerResult
+      --         (dualLedgerConfigMain cfg)
+      --         dualBlockMain
+      --         tickedDualLedgerStateMain
+      --     , applyMaybeBlock
+      --         (dualLedgerConfigAux cfg)
+      --         dualBlockAux
+      --         tickedDualLedgerStateAux
+      --         tickedDualLedgerStateAuxOrig
+      --     )
+      -- return $ castLedgerResult ledgerResult <&> \main' -> DualLedgerState {
+      --     dualLedgerStateMain   = main'
+      --   , dualLedgerStateAux    = aux'
+      --   , dualLedgerStateBridge = updateBridgeWithBlock
+      --                               block
+      --                               tickedDualLedgerStateBridge
+      --   }
 
   reapplyBlockLedgerResult cfg
                            block@DualBlock{..}
-                           TickedDualLedgerState{..} =
-    castLedgerResult ledgerResult <&> \main' -> DualLedgerState {
-        dualLedgerStateMain   = main'
-      , dualLedgerStateAux    = reapplyMaybeBlock
-                                  (dualLedgerConfigAux cfg)
-                                  dualBlockAux
-                                  tickedDualLedgerStateAux
-                                  tickedDualLedgerStateAuxOrig
-      , dualLedgerStateBridge = updateBridgeWithBlock
-                                  block
-                                  tickedDualLedgerStateBridge
-      }
-    where
-      ledgerResult = reapplyBlockLedgerResult
-                       (dualLedgerConfigMain cfg)
-                       dualBlockMain
-                       tickedDualLedgerStateMain
+                           TickedDualLedgerState{..} = undefined
+    -- castLedgerResult ledgerResult <&> \main' -> DualLedgerState {
+    --     dualLedgerStateMain   = main'
+    --   , dualLedgerStateAux    = reapplyMaybeBlock
+    --                               (dualLedgerConfigAux cfg)
+    --                               dualBlockAux
+    --                               tickedDualLedgerStateAux
+    --                               tickedDualLedgerStateAuxOrig
+    --   , dualLedgerStateBridge = updateBridgeWithBlock
+    --                               block
+    --                               tickedDualLedgerStateBridge
+    --   }
+    -- where
+    --   ledgerResult = reapplyBlockLedgerResult
+    --                    (dualLedgerConfigMain cfg)
+    --                    dualBlockMain
+    --                    tickedDualLedgerStateMain
 
   getBlockKeySets DualBlock{dualBlockMain, dualBlockAux} =
       DualBlockLedgerTables m a
@@ -933,8 +937,8 @@ applyMaybeBlock :: UpdateLedger blk
 applyMaybeBlock _   Nothing      _   st =
     -- if there is no block, then are no changes to track
     return $ st `withLedgerTables` polyEmptyLedgerTables
-applyMaybeBlock cfg (Just block) tst _  =
-    applyLedgerBlock cfg block tst
+applyMaybeBlock cfg (Just block) tst _  = undefined
+--    applyLedgerBlock cfg block tst
 
 -- | Lift 'reapplyLedgerBlock' to @Maybe blk@
 --
@@ -948,8 +952,8 @@ reapplyMaybeBlock :: UpdateLedger blk
 reapplyMaybeBlock _   Nothing      _   st =
     -- if there is no block, then are no changes to track
     st `withLedgerTables` polyEmptyLedgerTables
-reapplyMaybeBlock cfg (Just block) tst _  =
-    reapplyLedgerBlock cfg block tst
+reapplyMaybeBlock cfg (Just block) tst _  = undefined
+--    reapplyLedgerBlock cfg block tst
 
 -- | Used when the concrete and abstract implementation should agree on errors
 --

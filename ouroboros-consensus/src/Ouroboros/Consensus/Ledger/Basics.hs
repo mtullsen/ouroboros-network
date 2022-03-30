@@ -38,8 +38,10 @@ module Ouroboros.Consensus.Ledger.Basics (
   , pureLedgerResult
     -- * Definition of a ledger independent of a choice of block
   , IsLedger (..)
+  , IsLedgerHD (..)
   , LedgerCfg
   , applyChainTick
+  , applyChainTickHD
     -- * Link block to its ledger
   , LedgerConfig
   , LedgerError
@@ -313,6 +315,13 @@ class ( -- Requirements on the ledger state itself
        LedgerCfg l
     -> SlotNo
     -> l EmptyMK
+    -> LedgerResult l (Ticked1 l EmptyMK)
+
+class IsLedger l => IsLedgerHD l where
+  applyChainTickLedgerResultHD ::
+       LedgerCfg l
+    -> SlotNo
+    -> l EmptyMK
     -> LedgerResult l (Ticked1 l ValuesMK)
 
 -- | 'lrResult' after 'applyChainTickLedgerResult'
@@ -321,8 +330,16 @@ applyChainTick ::
   => LedgerCfg l
   -> SlotNo
   -> l EmptyMK
-  -> Ticked1 l ValuesMK
+  -> Ticked1 l EmptyMK
 applyChainTick = lrResult ..: applyChainTickLedgerResult
+
+applyChainTickHD ::
+     IsLedgerHD l
+  => LedgerCfg l
+  -> SlotNo
+  -> l EmptyMK
+  -> Ticked1 l ValuesMK
+applyChainTickHD = lrResult ..: applyChainTickLedgerResultHD
 
 -- This can't be in IsLedger because we have a compositional IsLedger instance
 -- for LedgerState HardForkBlock but we will not (at least ast first) have a

@@ -23,6 +23,7 @@
 
 -- TODO stylish haskell insists on deleting this pragma if placed in the group above.
 {-# LANGUAGE DerivingStrategies       #-}
+{-# LANGUAGE BangPatterns #-}
 
 
 module Ouroboros.Consensus.Storage.LedgerDB.InMemory (
@@ -113,7 +114,9 @@ import           Ouroboros.Consensus.Util
 import           Ouroboros.Consensus.Util.CBOR (decodeWithOrigin)
 import           Ouroboros.Consensus.Util.Versioned
 import qualified Debug.Trace as TRACE
-import qualified Data.Map.Strict as Map
+import Data.Maybe (isJust)
+-- import qualified Debug.Trace as TRACE
+-- import qualified Data.Map.Strict as Map
 
 {-------------------------------------------------------------------------------
   Ledger DB types
@@ -378,82 +381,82 @@ toRealPoint (Weaken ap)      = toRealPoint ap
 --
 -- We take in the entire 'LedgerDB' because we record that as part of errors.
 applyBlock :: forall m c l blk
-            . (ApplyBlock l blk, TickedTableStuff l, Monad m, c, HasCallStack)
+            . (ApplyBlock l blk, ApplyBlockHD l blk, TickedTableStuff l, Monad m, c, HasCallStack)
            => LedgerCfg l
            -> Ap m l blk c
            -> LedgerDB l
-           -> m (Maybe (l ValuesMK), l TrackingMK)
+           -> m (Maybe (l EmptyMK), l TrackingMK)
 applyBlock cfg ap db = case ap of
     Weaken ap' ->
         applyBlock cfg ap' db
     _ -> do
-      legacyLs' <- mapM (`legacyApplyBlock` ap) legacyLs
-      modernLs' <- modernApplyBlock ap
+      !legacyLs' <- mapM (`legacyApplyBlock` ap) (TRACE.trace ("isJust?" <> show (isJust legacyLs)) legacyLs)
+      !modernLs' <- modernApplyBlock ap
 
-      let _ = legacyLs' :: Maybe (l TrackingMK)
-          _ = modernLs' :: l TrackingMK
+      -- let _ = legacyLs' :: Maybe (l EmptyMK)
+      --     _ = modernLs' :: l TrackingMK
 
-          legacyValues :: Maybe (l ValuesMK)
-          legacyValues = forgetLedgerStateTracking <$> legacyLs'
+      --     legacyValues :: Maybe (l ValuesMK)
+      --     legacyValues = forgetLedgerStateTracking <$> legacyLs'
 
-          _modernValues ::l ValuesMK
-          _modernValues = forgetLedgerStateTracking modernLs'
+      --     _modernValues ::l ValuesMK
+      --     _modernValues = forgetLedgerStateTracking modernLs'
 
-          legacyDiff :: Maybe (LedgerTables l DiffMK)
-          legacyDiff = projectLedgerTables . trackingTablesToDiffs <$> legacyLs'
+      --     legacyDiff :: Maybe (LedgerTables l DiffMK)
+      --     legacyDiff = projectLedgerTables . trackingTablesToDiffs <$> legacyLs'
 
-          modernDiff :: LedgerTables l DiffMK
-          modernDiff = projectLedgerTables $ trackingTablesToDiffs modernLs'
+      --     modernDiff :: LedgerTables l DiffMK
+      --     modernDiff = projectLedgerTables $ trackingTablesToDiffs modernLs'
 
-          mixViaLegacy :: LedgerTables l DiffMK -> Maybe (LedgerTables l ValuesMK)
-          mixViaLegacy diff = projectLedgerTables . flip applyDiffsLedgerTables diff <$> legacyLs
+      --     mixViaLegacy :: LedgerTables l DiffMK -> Maybe (LedgerTables l ValuesMK)
+      --     mixViaLegacy diff = projectLedgerTables . flip applyDiffsLedgerTables diff <$> legacyLs
 
-          -- Ensure the given tables are empty if the old legacy state has no
-          -- tables
-          idViaLegacy :: IsApplyMapKind mk => l mk -> Maybe (LedgerTables l mk)
-          idViaLegacy = case legacyLs of
-            Nothing -> const Nothing
-            Just leg ->
-              Just
-              . projectLedgerTables
-              . withLedgerTables leg
-              . projectLedgerTables
+      --     -- Ensure the given tables are empty if the old legacy state has no
+      --     -- tables
+      --     idViaLegacy :: IsApplyMapKind mk => l mk -> Maybe (LedgerTables l mk)
+      --     idViaLegacy = case legacyLs of
+      --       Nothing -> const Nothing
+      --       Just leg ->
+      --         Just
+      --         . projectLedgerTables
+      --         . withLedgerTables leg
+      --         . projectLedgerTables
 
-      -- Note that we cannot directly compare legacy and modern ValuesMK, since
-      -- the legacy ValuesMK include the whole map, not just the ValuesMK that
-      -- were recently read/created.
-      --
-      -- We also cannot compare something routed through old states/tables with
-      -- something that was only routed through new states/tables, since the old
-      -- state might have no tables!
+      -- -- Note that we cannot directly compare legacy and modern ValuesMK, since
+      -- -- the legacy ValuesMK include the whole map, not just the ValuesMK that
+      -- -- were recently read/created.
+      -- --
+      -- -- We also cannot compare something routed through old states/tables with
+      -- -- something that was only routed through new states/tables, since the old
+      -- -- state might have no tables!
 
-      let annihilate :: l TrackingMK -> l EmptyMK
-          annihilate =
-              stowLedgerTables
-            . flip withLedgerTables polyEmptyLedgerTables
+      -- let annihilate :: l TrackingMK -> l EmptyMK
+      --     annihilate =
+      --         stowLedgerTables
+      --       . flip withLedgerTables polyEmptyLedgerTables
 
-          checks =
-            case (,,) <$> legacyLs' <*> legacyDiff <*> legacyValues of
-              Just (legLs', legDiff, legValues) -> [
-                  annihilate              legLs' == annihilate              modernLs'
-                , forgetLedgerStateTables legLs' == forgetLedgerStateTables modernLs'
-                , mapLedgerTables (\tbs@(ApplyDiffMK (UtxoDiff m)) -> TRACE.trace ("modern " <> show (Map.size m)) tbs) modernDiff
-                  == mapLedgerTables (\tbs@(ApplyDiffMK (UtxoDiff m)) -> TRACE.trace ("legacy " <> show (Map.size m)) tbs) legDiff
-                , asTypeOf True $ idViaLegacy legValues     == mixViaLegacy modernDiff
-                ]
-              _ -> [True]
+      --     checks =
+      --       case (,,) <$> legacyLs' <*> legacyDiff <*> legacyValues of
+      --         Just (legLs', legDiff, legValues) -> [
+      --             annihilate              legLs' == annihilate              modernLs'
+      --           , forgetLedgerStateTables legLs' == forgetLedgerStateTables modernLs'
+      --           , mapLedgerTables (\tbs@(ApplyDiffMK (UtxoDiff m)) -> TRACE.trace ("modern " <> show (Map.size m)) tbs) modernDiff
+      --             == mapLedgerTables (\tbs@(ApplyDiffMK (UtxoDiff m)) -> TRACE.trace ("legacy " <> show (Map.size m)) tbs) legDiff
+      --           , asTypeOf True $ idViaLegacy legValues     == mixViaLegacy modernDiff
+      --           ]
+      --         _ -> [True]
 
-      when (any not checks) $ error $ show checks
+      -- when (any not checks) $ error $ show checks
 
-      return (legacyValues, modernLs')
+      return (legacyLs', modernLs')
   where
     _modernLs :: l EmptyMK
     _modernLs = ledgerDbCurrent db
 
-    legacyLs :: Maybe (l ValuesMK)
-    legacyLs = unstowLedgerTables <$> ledgerDbCurrentValues db
+    legacyLs :: Maybe (l EmptyMK)
+    legacyLs = ledgerDbCurrentValues db
 
-    legacyApplyBlock :: l ValuesMK -> Ap m l blk c -> m (l TrackingMK)
+    legacyApplyBlock :: l EmptyMK -> Ap m l blk c -> m (l EmptyMK)
     legacyApplyBlock legLs = \case
       ReapplyVal b -> return $ tickThenReapply cfg b legLs
       ApplyVal b ->
@@ -480,25 +483,25 @@ applyBlock cfg ap db = case ap of
     modernApplyBlock :: Ap m l blk c -> m (l TrackingMK)
     modernApplyBlock = \case
       ReapplyVal b -> withBlockReadSets b $ \lh ->
-          return $ tickThenReapply cfg b lh
+          return $ tickThenReapplyHD cfg b lh
 
       ApplyVal b -> withBlockReadSets b $ \lh ->
                ( either (throwLedgerError db (blockRealPoint b)) return
                $ runExcept
-               $ tickThenApply cfg b lh)
+               $ tickThenApplyHD cfg b lh)
 
       ReapplyRef r  -> do
         b <- resolveBlock r -- TODO: ask: would it make sense to recursively call applyBlock using ReapplyVal?
 
         withBlockReadSets b $ \lh ->
-          return $ tickThenReapply cfg b lh
+          return $ tickThenReapplyHD cfg b lh
 
       ApplyRef r -> do
         b <- resolveBlock r
 
         withBlockReadSets b $ \lh ->
           either (throwLedgerError db (blockRealPoint b)) return $ runExcept $
-             tickThenApply cfg b lh
+             tickThenApplyHD cfg b lh
 
       -- A value of @Weaken@ will not make it to this point, as @applyBlock@ will recurse until it fully unwraps.
       Weaken _ -> error "unreachable"
@@ -849,11 +852,11 @@ ledgerDbPrune k db = db {
 pushLedgerState ::
      (IsLedger l, TickedTableStuff l)
   => SecurityParam
-  -> (Maybe (l ValuesMK), l TrackingMK) -- ^ Updated ledger state
+  -> (Maybe (l EmptyMK), l TrackingMK) -- ^ Updated ledger state
   -> LedgerDB l -> LedgerDB l
 pushLedgerState secParam (currentOld', currentNew') db@LedgerDB{..}  =
     ledgerDbPrune secParam $ db {
-        ledgerDbCheckpoints = (AS.:>) <$> ledgerDbCheckpoints <*> (Checkpoint . stowLedgerTables <$> currentOld')
+        ledgerDbCheckpoints = (AS.:>) <$> ledgerDbCheckpoints <*> (Checkpoint  <$> currentOld')
       , ledgerDbChangelog   =
           extendDbChangelog
             ledgerDbChangelog
@@ -897,7 +900,7 @@ data ExceededRollback = ExceededRollback {
     }
 
 ledgerDbPush :: forall m c l blk
-              . (ApplyBlock l blk, TickedTableStuff l, Monad m, c, HasCallStack)
+              . (ApplyBlock l blk, ApplyBlockHD l blk, TickedTableStuff l, Monad m, c, HasCallStack)
              => LedgerDbCfg l
              -> Ap m l blk c -> LedgerDB l -> m (LedgerDB l)
 ledgerDbPush cfg ap db =
@@ -906,7 +909,7 @@ ledgerDbPush cfg ap db =
 
 -- | Push a bunch of blocks (oldest first)
 ledgerDbPushMany ::
-     forall m c l blk . (ApplyBlock l blk, TickedTableStuff l, Monad m, c, HasCallStack)
+     forall m c l blk . (ApplyBlock l blk, ApplyBlockHD l blk, TickedTableStuff l, Monad m, c, HasCallStack)
   => (Pushing blk -> m ())
   -> LedgerDbCfg l
   -> [Ap m l blk c] -> LedgerDB l -> m (LedgerDB l)
@@ -918,7 +921,7 @@ ledgerDbPushMany trace cfg aps initDb = (repeatedlyM pushAndTrace) aps initDb
       ledgerDbPush cfg ap db
 
 -- | Switch to a fork
-ledgerDbSwitch :: (ApplyBlock l blk, TickedTableStuff l, Monad m, c, HasCallStack)
+ledgerDbSwitch :: (ApplyBlockHD l blk, TickedTableStuff l, Monad m, c, HasCallStack)
                => LedgerDbCfg l
                -> Word64          -- ^ How many blocks to roll back
                -> (UpdateLedgerDbTraceEvent blk -> m ())
@@ -973,17 +976,17 @@ instance IsLedger l => GetTip (LedgerDB l) where
 pureBlock :: blk -> Ap m l blk (ReadsKeySets m l)
 pureBlock = ReapplyVal
 
-ledgerDbPush' :: (ApplyBlock l blk, TickedTableStuff l, ReadsKeySets Identity l, HasCallStack)
+ledgerDbPush' :: (ApplyBlockHD l blk, TickedTableStuff l, ReadsKeySets Identity l, HasCallStack)
               => LedgerDbCfg l -> blk -> LedgerDB l -> LedgerDB l
 ledgerDbPush' cfg b = runIdentity . ledgerDbPush cfg (pureBlock b)
 
-ledgerDbPushMany' :: (ApplyBlock l blk, TickedTableStuff l, ReadsKeySets Identity l, HasCallStack)
+ledgerDbPushMany' :: (ApplyBlockHD l blk, TickedTableStuff l, ReadsKeySets Identity l, HasCallStack)
                   => LedgerDbCfg l -> [blk] -> LedgerDB l -> LedgerDB l
 ledgerDbPushMany' cfg bs =
   runIdentity . ledgerDbPushMany (const $ pure ()) cfg (map pureBlock bs)
 
 ledgerDbSwitch' :: forall l blk
-                 . (ApplyBlock l blk, TickedTableStuff l, ReadsKeySets Identity l, HasCallStack)
+                 . (ApplyBlockHD l blk, TickedTableStuff l, ReadsKeySets Identity l, HasCallStack)
                 => LedgerDbCfg l
                 -> Word64 -> [blk] -> LedgerDB l -> Maybe (LedgerDB l)
 ledgerDbSwitch' cfg n bs db =
