@@ -47,7 +47,7 @@ module Ouroboros.Consensus.Storage.LedgerDB.HD (
     -- ** Internals
   , SudElement (..)
   , SudMeasure (..)
-  ) where
+  , additionsUtxoValues) where
 
 import qualified Codec.CBOR.Decoding as CBOR
 import qualified Codec.CBOR.Encoding as CBOR
@@ -198,6 +198,15 @@ differenceUtxoValues (UtxoValues m1) (UtxoValues m2) =
         m1
         m2
 
+additionsUtxoValues :: Ord k => UtxoValues k v -> UtxoValues k v -> UtxoDiff k v
+additionsUtxoValues (UtxoValues m1) (UtxoValues m2) =
+      UtxoDiff
+    $ MapMerge.merge
+        MapMerge.dropMissing
+        (MapMerge.mapMissing $ \_k v -> UtxoEntryDiff v UedsIns)
+        (MapMerge.zipWithMaybeMatched $ \ _ _ _ -> Nothing)
+        m1
+        m2
 {-------------------------------------------------------------------------------
   Set of keys
 -------------------------------------------------------------------------------}

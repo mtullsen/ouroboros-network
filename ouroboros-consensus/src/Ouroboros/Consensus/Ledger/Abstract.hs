@@ -172,7 +172,7 @@ tickThenReapplyLedgerResult ::
 tickThenReapplyLedgerResult cfg blk l =
   let lrTick    = applyChainTickLedgerResult cfg (blockSlot blk) (forgetLedgerStateTables l)
       lrBlock   = reapplyBlockLedgerResult   cfg            blk  (mappendValuesTicked (projectLedgerTables l) $ lrResult lrTick)
-      tickDiffs = zipLedgerTables calculateDifference (projectLedgerTables l)
+      tickDiffs = zipLedgerTables calculateAdditions (projectLedgerTables l)
                 . mapLedgerTables (\tbs@(ApplyValuesMK (UtxoValues m)) -> TRACE.trace ("ticked values: " <> show (Map.size m)) tbs)
                 . projectLedgerTablesTicked
                 . lrResult

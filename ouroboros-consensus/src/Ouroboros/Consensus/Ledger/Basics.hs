@@ -122,7 +122,7 @@ module Ouroboros.Consensus.Ledger.Basics (
   , youngestImmutableSlotDbChangelog
     -- ** Misc
   , ShowLedgerState (..)
-  ) where
+  , calculateAdditions) where
 
 import qualified Codec.CBOR.Decoding as CBOR
 import qualified Codec.CBOR.Encoding as CBOR
@@ -882,6 +882,14 @@ calculateDifference ::
   -> TrackingMK k v
 calculateDifference (ApplyValuesMK before) (ApplyValuesMK after) =
     ApplyTrackingMK after (differenceUtxoValues before after)
+
+calculateAdditions ::
+     Ord k
+  => ValuesMK k v
+  -> ValuesMK k v
+  -> TrackingMK k v
+calculateAdditions (ApplyValuesMK before) (ApplyValuesMK after) =
+    ApplyTrackingMK after (additionsUtxoValues before after)
 
 {-------------------------------------------------------------------------------
   Link block to its ledger
