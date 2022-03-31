@@ -137,48 +137,6 @@ deriving anyclass instance
      CanHardFork xs
   => NoThunks (Ticked1 (LedgerState (HardForkBlock xs)) SeqDiffMK)
 
-instance CanHardFork' xs => IsLedgerHD (LedgerState (HardForkBlock xs)) where
-  applyChainTickLedgerResultHD :: LedgerCfg (LedgerState (HardForkBlock xs))
-                             -> SlotNo
-                             -> LedgerState (HardForkBlock xs) EmptyMK
-                             -> LedgerResult
-                                  (LedgerState (HardForkBlock xs))
-                                  (Ticked1 (LedgerState (HardForkBlock xs)) ValuesMK)
-  applyChainTickLedgerResultHD cfg@HardForkLedgerConfig{..} slot (HardForkLedgerState st) =
-      sequenceHardForkState
-        (hcizipWith proxySingle (tickOneHD ei slot) cfgs extended) <&> \l' ->
-      TickedHardForkLedgerState {
-          tickedHardForkLedgerStateTransition =
-            -- We are bundling a 'TransitionInfo' with a /ticked/ ledger state,
-            -- but /derive/ that 'TransitionInfo' from the /unticked/  (albeit
-            -- extended) state. That requires justification. Three cases:
-            --
-            -- o 'TransitionUnknown'. If the transition is unknown, then it
-            --   cannot become known due to ticking. In this case, we record
-            --   the tip of the ledger, which ticking also does not modify
-            --   (this is an explicit postcondition of 'applyChainTick').
-            -- o 'TransitionKnown'. If the transition to the next epoch is
-            --   already known, then ticking does not change that information.
-            --   It can't be the case that the 'SlotNo' we're ticking to is
-            --   /in/ that next era, because if was, then 'extendToSlot' would
-            --   have extended the telescope further.
-            --   (This does mean however that it is important to use the
-            --   /extended/ ledger state, not the original, to determine the
-            --   'TransitionInfo'.)
-            -- o 'TransitionImpossible'. This has two subcases: either we are
-            --   in the final era, in which case ticking certainly won't be able
-            --   to change that, or we're forecasting, which is simply not
-            --   applicable here.
-            State.mostRecentTransitionInfo cfg extended
-        , tickedHardForkLedgerStatePerEra = l'
-        }
-    where
-      cfgs = getPerEraLedgerConfig hardForkLedgerConfigPerEra
-      ei   = State.epochInfoLedger cfg st
-
-      extended :: HardForkState (Flip LedgerState ValuesMK) xs
-      extended = State.extendToSlot cfg slot st
-
 instance ( CanHardFork xs
          , NoThunks (LedgerTables (LedgerState (HardForkBlock xs)) SeqDiffMK)
          , NoThunks (LedgerTables (LedgerState (HardForkBlock xs)) ValuesMK)
@@ -195,7 +153,7 @@ instance ( CanHardFork xs
                              -> LedgerState (HardForkBlock xs) EmptyMK
                              -> LedgerResult
                                   (LedgerState (HardForkBlock xs))
-                                  (Ticked1 (LedgerState (HardForkBlock xs)) EmptyMK)
+                                  (Ticked1 (LedgerState (HardForkBlock xs)) ValuesMK)
   applyChainTickLedgerResult cfg@HardForkLedgerConfig{..} slot (HardForkLedgerState st) =
       sequenceHardForkState
         (hcizipWith proxySingle (tickOne ei slot) cfgs extended) <&> \l' ->
@@ -228,27 +186,10 @@ instance ( CanHardFork xs
       cfgs = getPerEraLedgerConfig hardForkLedgerConfigPerEra
       ei   = State.epochInfoLedger cfg st
 
-      extended :: HardForkState (Flip LedgerState EmptyMK) xs
-      extended = State.extendToSlotLegacy cfg slot st
+      extended :: HardForkState (Flip LedgerState ValuesMK) xs
+      extended = State.extendToSlot cfg slot st
 
 tickOne :: SingleEraBlock blk
-        => EpochInfo (Except PastHorizonException)
-        -> SlotNo
-        -> Index                                          xs   blk
-        -> WrapPartialLedgerConfig                             blk
-        -> (Flip LedgerState EmptyMK)                         blk
-        -> (     LedgerResult (LedgerState (HardForkBlock xs))
-             :.: FlipTickedLedgerState EmptyMK
-           )                                                   blk
-tickOne ei slot sopIdx partialCfg st =
-      Comp
-    . fmap ( FlipTickedLedgerState )
-    . embedLedgerResult (injectLedgerEvent sopIdx)
-    . applyChainTickLedgerResult (completeLedgerConfig' ei partialCfg) slot
-    . unFlip
-    $ st
-
-tickOneHD :: SingleEraBlock blk
         => EpochInfo (Except PastHorizonException)
         -> SlotNo
         -> Index                                          xs   blk
@@ -257,13 +198,11 @@ tickOneHD :: SingleEraBlock blk
         -> (     LedgerResult (LedgerState (HardForkBlock xs))
              :.: FlipTickedLedgerState ValuesMK
            )                                                   blk
-tickOneHD ei slot sopIdx partialCfg st =
+tickOne ei slot sopIdx partialCfg st =
       Comp
-    . fmap ( FlipTickedLedgerState
-           . mappendValuesTicked (projectLedgerTables $ unFlip st)
-           )
+    . fmap ( FlipTickedLedgerState )
     . embedLedgerResult (injectLedgerEvent sopIdx)
-    . applyChainTickLedgerResultHD (completeLedgerConfig' ei partialCfg) slot
+    . applyChainTickLedgerResult (completeLedgerConfig' ei partialCfg) slot
     . forgetLedgerStateTables
     . unFlip
     $ st
@@ -349,54 +288,6 @@ instance ( CanHardFork xs
          , NoThunks (LedgerTables (LedgerState (HardForkBlock xs)) ValuesMK)
          , TickedTableStuff (LedgerState (HardForkBlock xs))
          , LedgerTablesCanHardFork xs
-         , ApplyBlock (LedgerState (HardForkBlock xs)) (HardForkBlock xs)) => ApplyBlockHD (LedgerState (HardForkBlock xs)) (HardForkBlock xs) where
-
-  applyBlockLedgerResultHD cfg
-                    (HardForkBlock (OneEraBlock block))
-                    (TickedHardForkLedgerState transition st) =
-      case State.match block st of
-        Left mismatch ->
-          -- Block from the wrong era (note that 'applyChainTick' will already
-          -- have initiated the transition to the next era if appropriate).
-            throwError
-          $ HardForkLedgerErrorWrongEra . MismatchEraInfo
-          $ Match.bihcmap proxySingle singleEraInfo ledgerInfo mismatch
-        Right matched ->
-            fmap (fmap HardForkLedgerState . sequenceHardForkState)
-          $ hsequence'
-          $ hcizipWith proxySingle applyHD cfgs matched
-    where
-      cfgs = distribLedgerConfig ei cfg
-      ei   = State.epochInfoPrecomputedTransitionInfo
-               (hardForkLedgerConfigShape cfg)
-               transition
-               st
-
-  reapplyBlockLedgerResultHD cfg
-                      (HardForkBlock (OneEraBlock block))
-                      (TickedHardForkLedgerState transition st) =
-      case State.match block st of
-        Left _mismatch ->
-          -- We already applied this block to this ledger state,
-          -- so it can't be from the wrong era
-          error "reapplyBlockLedgerResult: can't be from other era"
-        Right matched ->
-            fmap HardForkLedgerState
-          $ sequenceHardForkState
-          $ hcizipWith proxySingle reapplyHD cfgs matched
-    where
-      cfgs = distribLedgerConfig ei cfg
-      ei   = State.epochInfoPrecomputedTransitionInfo
-               (hardForkLedgerConfigShape cfg)
-               transition
-               st
-
-
-instance ( CanHardFork xs
-         , NoThunks (LedgerTables (LedgerState (HardForkBlock xs)) SeqDiffMK)
-         , NoThunks (LedgerTables (LedgerState (HardForkBlock xs)) ValuesMK)
-         , TickedTableStuff (LedgerState (HardForkBlock xs))
-         , LedgerTablesCanHardFork xs
          )
       => ApplyBlock (LedgerState (HardForkBlock xs)) (HardForkBlock xs) where
 
@@ -454,10 +345,10 @@ instance ( CanHardFork xs
 apply :: SingleEraBlock blk
       => Index xs                                           blk
       -> WrapLedgerConfig                                   blk
-      -> Product I (FlipTickedLedgerState EmptyMK)         blk
+      -> Product I (FlipTickedLedgerState ValuesMK)         blk
       -> (    Except (HardForkLedgerError xs)
           :.: LedgerResult (LedgerState (HardForkBlock xs))
-          :.: Flip LedgerState EmptyMK
+          :.: Flip LedgerState TrackingMK
          )                                                  blk
 apply index (WrapLedgerConfig cfg) (Pair (I block) (FlipTickedLedgerState st)) =
       Comp
@@ -468,42 +359,15 @@ apply index (WrapLedgerConfig cfg) (Pair (I block) (FlipTickedLedgerState st)) =
 reapply :: SingleEraBlock blk
         => Index xs                                           blk
         -> WrapLedgerConfig                                   blk
-        -> Product I (FlipTickedLedgerState EmptyMK)         blk
+        -> Product I (FlipTickedLedgerState ValuesMK)         blk
         -> (    LedgerResult (LedgerState (HardForkBlock xs))
-            :.: Flip LedgerState EmptyMK
+            :.: Flip LedgerState TrackingMK
            )                                                  blk
 reapply index (WrapLedgerConfig cfg) (Pair (I block) (FlipTickedLedgerState st)) =
       Comp
     $ fmap Flip
     $ embedLedgerResult (injectLedgerEvent index)
     $ reapplyBlockLedgerResult cfg block st
-
-applyHD :: SingleEraBlock blk
-      => Index xs                                           blk
-      -> WrapLedgerConfig                                   blk
-      -> Product I (FlipTickedLedgerState ValuesMK)         blk
-      -> (    Except (HardForkLedgerError xs)
-          :.: LedgerResult (LedgerState (HardForkBlock xs))
-          :.: Flip LedgerState TrackingMK
-         )                                                  blk
-applyHD index (WrapLedgerConfig cfg) (Pair (I block) (FlipTickedLedgerState st)) =
-      Comp
-    $ withExcept (injectLedgerError index)
-    $ fmap (Comp . fmap Flip . embedLedgerResult (injectLedgerEvent index))
-    $ applyBlockLedgerResultHD cfg block st
-
-reapplyHD :: SingleEraBlock blk
-        => Index xs                                           blk
-        -> WrapLedgerConfig                                   blk
-        -> Product I (FlipTickedLedgerState ValuesMK)         blk
-        -> (    LedgerResult (LedgerState (HardForkBlock xs))
-            :.: Flip LedgerState TrackingMK
-           )                                                  blk
-reapplyHD index (WrapLedgerConfig cfg) (Pair (I block) (FlipTickedLedgerState st)) =
-      Comp
-    $ fmap Flip
-    $ embedLedgerResult (injectLedgerEvent index)
-    $ reapplyBlockLedgerResultHD cfg block st
 
 {-------------------------------------------------------------------------------
   UpdateLedger
@@ -590,8 +454,6 @@ type CanHardFork' xs =
   , NoThunks (LedgerTables (LedgerState (HardForkBlock xs)) ValuesMK)
   , LedgerTablesCanHardFork xs
   )
-
-instance CanHardFork' xs => LedgerSupportsProtocolHD (HardForkBlock xs) where
 
 instance CanHardFork' xs => LedgerSupportsProtocol (HardForkBlock xs) where
   protocolLedgerView HardForkLedgerConfig{..}

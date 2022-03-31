@@ -87,7 +87,7 @@ import qualified Ouroboros.Consensus.Storage.VolatileDB as VolatileDB
 --
 -- See "## Initialization" in ChainDB.md.
 initialChainSelection
-  :: forall m blk. (IOLike m, LedgerSupportsProtocolHD blk)
+  :: forall m blk. (IOLike m, LedgerSupportsProtocol blk)
   => ImmutableDB m blk
   -> VolatileDB m blk
   -> LgrDB m blk
@@ -240,7 +240,7 @@ addBlockSync
   :: forall m blk.
      ( IOLike m
      , GetPrevHash blk
-     , LedgerSupportsProtocolHD blk
+     , LedgerSupportsProtocol blk
      , InspectLedger blk
      , HasHardForkHistory blk
      , HasCallStack
@@ -354,7 +354,7 @@ olderThanK hdr isEBB immBlockNo
 -- | Return the new tip.
 chainSelectionForFutureBlocks
   :: ( IOLike m
-     , LedgerSupportsProtocolHD blk
+     , LedgerSupportsProtocol blk
      , InspectLedger blk
      , HasHardForkHistory blk
      , HasCallStack
@@ -412,7 +412,7 @@ chainSelectionForBlock
   :: forall m blk.
      ( IOLike m
      , HasHeader blk
-     , LedgerSupportsProtocolHD blk
+     , LedgerSupportsProtocol blk
      , InspectLedger blk
      , HasHardForkHistory blk
      , HasCallStack
@@ -772,7 +772,7 @@ data ChainSelEnv m blk = ChainSelEnv
 chainSelection
   :: forall m blk.
      ( IOLike m
-     , LedgerSupportsProtocolHD blk
+     , LedgerSupportsProtocol blk
      , HasCallStack
      )
   => ChainSelEnv m blk
@@ -909,7 +909,7 @@ data ValidationResult blk =
 ledgerValidateCandidate
   :: forall m blk.
      ( IOLike m
-     , LedgerSupportsProtocolHD blk
+     , LedgerSupportsProtocol blk
      , HasCallStack
      )
   => ChainSelEnv m blk
@@ -1025,7 +1025,7 @@ futureCheckCandidate chainSelEnv validatedChainDiff =
 -- | Validate a candidate chain using 'ledgerValidate' and 'futureCheck'.
 validateCandidate
   :: ( IOLike m
-     , LedgerSupportsProtocolHD blk
+     , LedgerSupportsProtocol blk
      , HasCallStack
      )
   => ChainSelEnv m blk

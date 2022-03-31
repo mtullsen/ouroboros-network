@@ -21,6 +21,8 @@
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE UndecidableInstances  #-}
 
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+
 -- | Definition is 'IsLedger'
 --
 -- Normally this is imported from "Ouroboros.Consensus.Ledger.Abstract". We
@@ -38,10 +40,8 @@ module Ouroboros.Consensus.Ledger.Basics (
   , pureLedgerResult
     -- * Definition of a ledger independent of a choice of block
   , IsLedger (..)
-  , IsLedgerHD (..)
   , LedgerCfg
   , applyChainTick
-  , applyChainTickHD
     -- * Link block to its ledger
   , LedgerConfig
   , LedgerError
@@ -124,7 +124,10 @@ module Ouroboros.Consensus.Ledger.Basics (
   , youngestImmutableSlotDbChangelog
     -- ** Misc
   , ShowLedgerState (..)
-  , calculateAdditions) where
+  , calculateAdditions
+  , WithoutLedgerTables(..)
+  , WrappedLedgerStateKind
+  ) where
 
 import qualified Codec.CBOR.Decoding as CBOR
 import qualified Codec.CBOR.Encoding as CBOR
@@ -315,14 +318,8 @@ class ( -- Requirements on the ledger state itself
        LedgerCfg l
     -> SlotNo
     -> l EmptyMK
-    -> LedgerResult l (Ticked1 l EmptyMK)
-
-class IsLedger l => IsLedgerHD l where
-  applyChainTickLedgerResultHD ::
-       LedgerCfg l
-    -> SlotNo
-    -> l EmptyMK
     -> LedgerResult l (Ticked1 l ValuesMK)
+
 
 -- | 'lrResult' after 'applyChainTickLedgerResult'
 applyChainTick ::
@@ -330,16 +327,8 @@ applyChainTick ::
   => LedgerCfg l
   -> SlotNo
   -> l EmptyMK
-  -> Ticked1 l EmptyMK
-applyChainTick = lrResult ..: applyChainTickLedgerResult
-
-applyChainTickHD ::
-     IsLedgerHD l
-  => LedgerCfg l
-  -> SlotNo
-  -> l EmptyMK
   -> Ticked1 l ValuesMK
-applyChainTickHD = lrResult ..: applyChainTickLedgerResultHD
+applyChainTick = lrResult ..: applyChainTickLedgerResult
 
 -- This can't be in IsLedger because we have a compositional IsLedger instance
 -- for LedgerState HardForkBlock but we will not (at least ast first) have a
@@ -634,6 +623,7 @@ forgetTickedLedgerStateTracking = mapOverLedgerTablesTicked valuesTrackingMK
 
 type MapKind         = {- key -} Type -> {- value -} Type -> Type
 type LedgerStateKind = MapKind -> Type
+type WrappedLedgerStateKind = LedgerStateKind -> LedgerStateKind
 
 data MapKind' = DiffMK'
               | EmptyMK'
@@ -1039,7 +1029,7 @@ newtype DbChangelogState l = DbChangelogState {unDbChangelogState :: l EmptyMK}
   deriving (Generic)
 
 deriving instance Eq       (l EmptyMK) => Eq       (DbChangelogState l)
-deriving instance NoThunks (l EmptyMK) => NoThunks (DbChangelogState l)
+deriving anyclass instance NoThunks (l EmptyMK) => NoThunks (DbChangelogState l)
 
 instance ShowLedgerState l => Show (DbChangelogState l) where
   showsPrec p (DbChangelogState x) =
@@ -1263,3 +1253,64 @@ youngestImmutableSlotDbChangelog =
     . either unDbChangelogState unDbChangelogState
     . AS.head
     . changelogImmutableStates
+
+{-------------------------------------------------------------------------------
+  A LedgerState without tables
+-------------------------------------------------------------------------------}
+
+newtype WithoutLedgerTables (l :: LedgerStateKind) (mk :: MapKind) = WithoutLedgerTables { withoutLedgerTables :: l EmptyMK }
+  deriving (Generic)
+
+deriving newtype instance NoThunks (l EmptyMK) => NoThunks (WithoutLedgerTables l mk)
+
+type instance LedgerCfg (WithoutLedgerTables l) = LedgerCfg l
+
+data instance Ticked1 (WithoutLedgerTables l) mk = TickedWithoutLedgerTables { tickedWithoutLedgerTables :: Ticked1 l EmptyMK }
+
+type instance HeaderHash (WithoutLedgerTables l) = HeaderHash (l EmptyMK)
+type instance HeaderHash (WithoutLedgerTables l mk) = HeaderHash (WithoutLedgerTables l)
+
+instance InMemory (WithoutLedgerTables l) where
+  convertMapKind (WithoutLedgerTables wlt) = WithoutLedgerTables wlt
+
+instance InMemory (Ticked1 (WithoutLedgerTables l)) where
+  convertMapKind (TickedWithoutLedgerTables wlt) = TickedWithoutLedgerTables wlt
+
+instance ShowLedgerState l =>  ShowLedgerState (WithoutLedgerTables l) where
+  showsLedgerState _sing (WithoutLedgerTables wlt) = showsLedgerState sing wlt
+
+instance ShowLedgerState (LedgerTables (WithoutLedgerTables l)) where
+  showsLedgerState _sign NoLedgerTables = showString "NoLedgerTables"
+
+instance Eq (l EmptyMK) => Eq (WithoutLedgerTables l mk) where
+  WithoutLedgerTables a == WithoutLedgerTables b = a == b
+
+instance StowableLedgerTables (WithoutLedgerTables l) where
+  stowLedgerTables     = convertMapKind
+  unstowLedgerTables   = convertMapKind
+  isCandidateForUnstow = const True
+
+instance Eq (l EmptyMK) => TableStuff (WithoutLedgerTables l) where
+  data LedgerTables (WithoutLedgerTables l) mk = NoLedgerTables
+    deriving (Generic, Eq, Show, NoThunks)
+
+  projectLedgerTables _ = NoLedgerTables
+
+  withLedgerTables x NoLedgerTables = convertMapKind x
+
+  pureLedgerTables _ = NoLedgerTables
+  mapLedgerTables _ NoLedgerTables = NoLedgerTables
+  traverseLedgerTables _ NoLedgerTables = pure NoLedgerTables
+  zipLedgerTables _ NoLedgerTables NoLedgerTables = NoLedgerTables
+  foldLedgerTables _ NoLedgerTables = mempty
+  foldLedgerTables2 _ NoLedgerTables NoLedgerTables = mempty
+
+instance GetTip (l EmptyMK) => GetTip (WithoutLedgerTables l mk) where
+  getTip = castPoint . getTip . withoutLedgerTables
+
+instance (HeaderHash l ~ HeaderHash (l EmptyMK), GetTip (Ticked1 l EmptyMK)) => GetTip (Ticked1 (WithoutLedgerTables l) mk) where
+  getTip = castPoint . getTip . tickedWithoutLedgerTables
+
+instance Eq (l EmptyMK) => TickedTableStuff (WithoutLedgerTables l) where
+  projectLedgerTablesTicked _st                 = NoLedgerTables
+  withLedgerTablesTicked st NoLedgerTables      = convertMapKind st

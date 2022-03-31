@@ -190,7 +190,7 @@ defaultArgs lgrHasFS diskPolicy = LgrDbArgs {
 -- that were replayed.
 openDB :: forall m blk.
           ( IOLike m
-          , LedgerSupportsProtocolHD blk
+          , LedgerSupportsProtocol blk
           , LgrDbSerialiseConstraints blk
           , InspectLedger blk
           , HasCallStack
@@ -257,7 +257,7 @@ openDB args@LgrDbArgs { lgrHasFS = lgrHasFS@(SomeHasFS hasFS), .. } replayTracer
 initFromDisk
   :: forall blk m.
      ( IOLike m
-     , LedgerSupportsProtocolHD blk
+     , LedgerSupportsProtocol blk
      , LgrDbSerialiseConstraints blk
      , InspectLedger blk
      , HasCallStack
@@ -384,7 +384,7 @@ data ValidateResult blk =
   | ValidateLedgerError      (AnnLedgerError' blk)
   | ValidateExceededRollBack ExceededRollback
 
-validate :: forall m blk. (IOLike m, LedgerSupportsProtocolHD blk, HasCallStack)
+validate :: forall m blk. (IOLike m, LedgerSupportsProtocol blk, HasCallStack)
          => LgrDB m blk
          -> LedgerDB' blk
             -- ^ This is used as the starting point for validation, not the one

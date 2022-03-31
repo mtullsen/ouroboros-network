@@ -84,7 +84,7 @@ import qualified Ouroboros.Consensus.Storage.VolatileDB as VolatileDB
 launchBgTasks
   :: forall m blk.
      ( IOLike m
-     , LedgerSupportsProtocolHD blk
+     , LedgerSupportsProtocol blk
      , InspectLedger blk
      , HasHardForkHistory blk
      , LgrDbSerialiseConstraints blk
@@ -524,7 +524,7 @@ dumpGcSchedule (GcSchedule varQueue) = toList <$> readTVar varQueue
 -- ChainDB.
 addBlockRunner
   :: ( IOLike m
-     , LedgerSupportsProtocolHD blk
+     , LedgerSupportsProtocol blk
      , InspectLedger blk
      , HasHardForkHistory blk
      , HasCallStack

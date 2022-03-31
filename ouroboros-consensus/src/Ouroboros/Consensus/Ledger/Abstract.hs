@@ -10,29 +10,25 @@
 {-# LANGUAGE TypeOperators         #-}
 {-# LANGUAGE UndecidableInstances  #-}
 
+{-# LANGUAGE ConstraintKinds #-}
+
 -- | Interface to the ledger layer
 module Ouroboros.Consensus.Ledger.Abstract (
     -- * Type-level validation marker
     Validated
     -- * Apply block
   , ApplyBlock (..)
-  , ApplyBlockHD (..)
+  , ApplyBlock'
   , UpdateLedger
     -- * Derived
   , applyLedgerBlock
-  , applyLedgerBlockHD
-  , foldLedgerHD
+  , foldLedger
   , reapplyLedgerBlock
-  , reapplyLedgerBlockHD
-  , refoldLedgerHD
+  , refoldLedger
   , tickThenApply
   , tickThenApplyLedgerResult
   , tickThenReapply
   , tickThenReapplyLedgerResult
-  , tickThenApplyHD
-  , tickThenApplyLedgerResultHD
-  , tickThenReapplyHD
-  , tickThenReapplyLedgerResultHD
     -- ** Short-hand
   , ledgerTipHash
   , ledgerTipPoint
@@ -50,9 +46,8 @@ import           Ouroboros.Consensus.Block.Abstract
 import           Ouroboros.Consensus.Ledger.Basics
 import           Ouroboros.Consensus.Ticked
 import           Ouroboros.Consensus.Util (repeatedly, repeatedlyM, (..:))
+
 import qualified Debug.Trace as TRACE
-import qualified Data.Map.Strict as Map
-import Ouroboros.Consensus.Storage.LedgerDB.HD (UtxoDiff(..), UtxoValues (UtxoValues))
 
 -- | " Validated " transaction or block
 --
@@ -100,8 +95,8 @@ class ( IsLedger l
        HasCallStack
     => LedgerCfg l
     -> blk
-    -> Ticked1 l EmptyMK
-    -> Except (LedgerErr l) (LedgerResult l (l EmptyMK))
+    -> Ticked1 l ValuesMK
+    -> Except (LedgerErr l) (LedgerResult l (l TrackingMK))
 
   -- | Re-apply a block to the very same ledger state it was applied in before.
   --
@@ -116,8 +111,8 @@ class ( IsLedger l
        HasCallStack
     => LedgerCfg l
     -> blk
-    -> Ticked1 l EmptyMK
-    -> LedgerResult l (l EmptyMK)
+    -> Ticked1 l ValuesMK
+    -> LedgerResult l (l TrackingMK)
 
   -- | Given a block, get the key-sets that we need to apply it to a ledger
   -- state.
@@ -127,37 +122,13 @@ class ( IsLedger l
   -- ledger state transformation concern.
   getBlockKeySets :: blk -> TableKeySets l
 
-class ( IsLedgerHD l, ApplyBlock l blk ) => ApplyBlockHD l blk where
-
-  -- | Apply a block to the ledger state.
-  --
-  -- This is passed the ledger state ticked with the slot of the given block, so
-  -- 'applyChainTickLedgerResult' has already been called.
-  applyBlockLedgerResultHD ::
-       HasCallStack
-    => LedgerCfg l
-    -> blk
-    -> Ticked1 l ValuesMK
-    -> Except (LedgerErr l) (LedgerResult l (l TrackingMK))
-
-  -- | Re-apply a block to the very same ledger state it was applied in before.
-  --
-  -- Since a block can only be applied to a single, specific, ledger state,
-  -- if we apply a previously applied block again it will be applied in the
-  -- very same ledger state, and therefore can't possibly fail.
-  --
-  -- It is worth noting that since we already know that the block is valid in
-  -- the provided ledger state, the ledger layer should not perform /any/
-  -- validation checks.
-  reapplyBlockLedgerResultHD ::
-       HasCallStack
-    => LedgerCfg l
-    -> blk
-    -> Ticked1 l ValuesMK
-    -> LedgerResult l (l TrackingMK)
+type ApplyBlock' l blk = ( ApplyBlock l blk
+                         , ApplyBlock (WithoutLedgerTables l) blk
+                         , LedgerErr l ~ LedgerErr (WithoutLedgerTables l)
+                         , TickedTableStuff l)
 
 -- | Interaction with the ledger layer
-class (ApplyBlock (LedgerState blk) blk, ApplyBlockHD (LedgerState blk) blk, TickedTableStuff (LedgerState blk)) => UpdateLedger blk
+class ApplyBlock' (LedgerState blk) blk => UpdateLedger blk
 
 {-------------------------------------------------------------------------------
   Derived functionality
@@ -168,60 +139,28 @@ applyLedgerBlock ::
      (ApplyBlock l blk, HasCallStack)
   => LedgerCfg l
   -> blk
-  -> Ticked1 l EmptyMK
-  -> Except (LedgerErr l) (l EmptyMK)
-applyLedgerBlock = fmap lrResult ..: applyBlockLedgerResult
-
-applyLedgerBlockHD ::
-     (ApplyBlockHD l blk, HasCallStack)
-  => LedgerCfg l
-  -> blk
   -> Ticked1 l ValuesMK
   -> Except (LedgerErr l) (l TrackingMK)
-applyLedgerBlockHD = fmap lrResult ..: applyBlockLedgerResultHD
+applyLedgerBlock = fmap lrResult ..: applyBlockLedgerResult
 
 -- | 'lrResult' after 'reapplyBlockLedgerResult'
 reapplyLedgerBlock ::
      (ApplyBlock l blk, HasCallStack)
   => LedgerCfg l
   -> blk
-  -> Ticked1 l EmptyMK
-  -> l EmptyMK
-reapplyLedgerBlock = lrResult ..: reapplyBlockLedgerResult
-
--- | 'lrResult' after 'reapplyBlockLedgerResult'
-reapplyLedgerBlockHD ::
-     (ApplyBlockHD l blk, HasCallStack)
-  => LedgerCfg l
-  -> blk
   -> Ticked1 l ValuesMK
   -> l TrackingMK
-reapplyLedgerBlockHD = lrResult ..: reapplyBlockLedgerResultHD
-
+reapplyLedgerBlock = lrResult ..: reapplyBlockLedgerResult
 
 tickThenApplyLedgerResult ::
-     ApplyBlock l blk
-  => LedgerCfg l
-  -> blk
-  -> l EmptyMK
-  -> Except (LedgerErr l) (LedgerResult l (l EmptyMK))
-tickThenApplyLedgerResult cfg blk l = do
-  let lrTick = applyChainTickLedgerResult cfg (blockSlot blk) l
-  lrBlock <-   applyBlockLedgerResult     cfg            blk  (lrResult lrTick)
-  pure LedgerResult {
-      lrEvents = lrEvents lrTick <> lrEvents lrBlock
-    , lrResult = lrResult lrBlock
-    }
-
-tickThenApplyLedgerResultHD ::
-     (ApplyBlockHD l blk, TickedTableStuff l)
+     (ApplyBlock l blk, TickedTableStuff l)
   => LedgerCfg l
   -> blk
   -> l ValuesMK
   -> Except (LedgerErr l) (LedgerResult l (l TrackingMK))
-tickThenApplyLedgerResultHD cfg blk l = do
-  let lrTick = applyChainTickLedgerResultHD cfg (blockSlot blk) (forgetLedgerStateTables l)
-  lrBlock <-   applyBlockLedgerResultHD     cfg            blk  (mappendValuesTicked (projectLedgerTables l) $ lrResult lrTick)
+tickThenApplyLedgerResult cfg blk l = do
+  let lrTick = applyChainTickLedgerResult cfg (blockSlot blk) (forgetLedgerStateTables l)
+  lrBlock <-   applyBlockLedgerResult     cfg            blk  (mappendValuesTicked (projectLedgerTables l) $ lrResult lrTick)
   let tickDiffs = zipLedgerTables calculateDifference (projectLedgerTables l)
                 . projectLedgerTablesTicked
                 . lrResult
@@ -232,79 +171,48 @@ tickThenApplyLedgerResultHD cfg blk l = do
     }
 
 tickThenReapplyLedgerResult ::
-     ApplyBlock l blk
-  => LedgerCfg l
-  -> blk
-  -> l EmptyMK
-  -> LedgerResult l (l EmptyMK)
-tickThenReapplyLedgerResult cfg blk l =
-  let lrTick    = applyChainTickLedgerResult cfg (blockSlot blk) l
-      lrBlock   = reapplyBlockLedgerResult   cfg            blk  (lrResult lrTick)
-  in TRACE.trace ("tickthenReapp legacy: " <> (show $ blockSlot blk)) $ LedgerResult {
-      lrEvents = lrEvents lrTick <> lrEvents lrBlock
-    , lrResult = lrResult lrBlock
-    }
-
-tickThenReapplyLedgerResultHD ::
-     (ApplyBlockHD l blk, TickedTableStuff l)
+     (ApplyBlock l blk, TickedTableStuff l)
   => LedgerCfg l
   -> blk
   -> l ValuesMK
   -> LedgerResult l (l TrackingMK)
-tickThenReapplyLedgerResultHD cfg blk l =
-  let lrTick    = applyChainTickLedgerResultHD cfg (blockSlot blk) (forgetLedgerStateTables l)
-      lrBlock   = reapplyBlockLedgerResultHD   cfg            blk  (mappendValuesTicked (projectLedgerTables l) $ lrResult lrTick)
-      tickDiffs = zipLedgerTables calculateAdditions (projectLedgerTables l)
-                . mapLedgerTables (\tbs@(ApplyValuesMK (UtxoValues m)) -> TRACE.trace ("ticked values: " <> show (Map.size m)) tbs)
+tickThenReapplyLedgerResult cfg blk l =
+  let lrTick    = applyChainTickLedgerResult cfg (blockSlot blk) (forgetLedgerStateTables l)
+      lrBlock   = reapplyBlockLedgerResult   cfg            blk  (mappendValuesTicked (projectLedgerTables l) $ lrResult lrTick)
+      tickDiffs = zipLedgerTables calculateDifference polyEmptyLedgerTables
                 . projectLedgerTablesTicked
                 . lrResult
                 $ lrTick
-  in TRACE.trace ("tickthenReapp modern: " <> (show $ blockSlot blk)) $ LedgerResult {
+  in TRACE.trace ("tickthenReapp: " <> (show $ blockSlot blk)) $ LedgerResult {
       lrEvents = lrEvents lrTick <> lrEvents lrBlock
-    , lrResult = mappendTracking (mapLedgerTables (\tbs@(ApplyTrackingMK _ (UtxoDiff m)) -> TRACE.trace ("tick " <> show (Map.size m)) tbs) tickDiffs) $ lrResult lrBlock
+    , lrResult = mappendTracking tickDiffs $ lrResult lrBlock
     }
 
 tickThenApply ::
-     ApplyBlock l blk
-  => LedgerCfg l
-  -> blk
-  -> l EmptyMK
-  -> Except (LedgerErr l) (l EmptyMK)
-tickThenApply = fmap lrResult ..: tickThenApplyLedgerResult
-
-tickThenApplyHD ::
-     (ApplyBlockHD l blk, TickedTableStuff l)
+     (ApplyBlock l blk, TickedTableStuff l)
   => LedgerCfg l
   -> blk
   -> l ValuesMK
   -> Except (LedgerErr l) (l TrackingMK)
-tickThenApplyHD = fmap lrResult ..: tickThenApplyLedgerResultHD
+tickThenApply = fmap lrResult ..: tickThenApplyLedgerResult
 
 tickThenReapply ::
-     ApplyBlock l blk
-  => LedgerCfg l
-  -> blk
-  -> l EmptyMK
-  -> l EmptyMK
-tickThenReapply = lrResult ..: tickThenReapplyLedgerResult
-
-tickThenReapplyHD ::
-     (ApplyBlockHD l blk, TickedTableStuff l)
+     (ApplyBlock l blk, TickedTableStuff l)
   => LedgerCfg l
   -> blk
   -> l ValuesMK
   -> l TrackingMK
-tickThenReapplyHD = lrResult ..: tickThenReapplyLedgerResultHD
+tickThenReapply = lrResult ..: tickThenReapplyLedgerResult
 
-foldLedgerHD ::
-     (ApplyBlockHD l blk, TickedTableStuff l)
+foldLedger ::
+     (ApplyBlock l blk, TickedTableStuff l)
   => LedgerCfg l -> [blk] -> l ValuesMK -> Except (LedgerErr l) (l ValuesMK)
-foldLedgerHD cfg = repeatedlyM (\blk -> fmap forgetLedgerStateTracking . tickThenApplyHD cfg blk)
+foldLedger cfg = repeatedlyM (\blk -> fmap forgetLedgerStateTracking . tickThenApply cfg blk)
 
-refoldLedgerHD ::
-     (ApplyBlockHD l blk, TickedTableStuff l)
+refoldLedger ::
+     (ApplyBlock l blk, TickedTableStuff l)
   => LedgerCfg l -> [blk] -> l ValuesMK -> l ValuesMK
-refoldLedgerHD cfg = repeatedly (\blk -> forgetLedgerStateTracking . tickThenReapplyHD cfg blk)
+refoldLedger cfg = repeatedly (\blk -> forgetLedgerStateTracking . tickThenReapply cfg blk)
 
 {-------------------------------------------------------------------------------
   Short-hand

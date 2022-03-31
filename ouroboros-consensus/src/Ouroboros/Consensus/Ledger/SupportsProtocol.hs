@@ -2,7 +2,7 @@
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Ouroboros.Consensus.Ledger.SupportsProtocol (LedgerSupportsProtocol (..), LedgerSupportsProtocolHD) where
+module Ouroboros.Consensus.Ledger.SupportsProtocol (LedgerSupportsProtocol (..)) where
 
 import           Control.Monad.Except
 import           GHC.Stack (HasCallStack)
@@ -66,11 +66,6 @@ class ( BlockSupportsProtocol blk
     => LedgerConfig blk
     -> LedgerState blk mk
     -> Forecast (LedgerView (BlockProtocol blk))
-
-class ( LedgerSupportsProtocol blk
-      , ApplyBlockHD (LedgerState blk) blk
-      , IsLedgerHD (LedgerState blk)
-      ) => LedgerSupportsProtocolHD blk where
 
 -- | Relation between 'ledgerViewForecastAt' and 'applyChainTick'
 _lemma_ledgerViewForecastAt_applyChainTick
