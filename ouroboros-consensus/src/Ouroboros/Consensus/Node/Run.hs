@@ -80,7 +80,7 @@ class ( Typeable blk
       , forall fp result. Show (BlockQuery blk fp result)
       ) => SerialiseNodeToClientConstraints blk
 
-class ( LedgerSupportsProtocol           blk
+class ( LedgerSupportsProtocolHD           blk
       , InspectLedger                    blk
       , HasHardForkHistory               blk
       , LedgerSupportsMempool            blk

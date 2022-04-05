@@ -162,13 +162,4 @@ fromChain ::
      -- ^ Initial ledger state
   -> Chain blk
   -> HeaderStateHistory blk
-fromChain cfg initState chain =
-    HeaderStateHistory (AS.fromOldestFirst anchorSnapshot snapshots)
-  where
-    anchorSnapshot NE.:| snapshots =
-          fmap headerState
-        . NE.scanl
-            (\st blk -> forgetLedgerStateTracking $ tickThenReapply (ExtLedgerCfg cfg) blk st)
-            initState
-        . Chain.toOldestFirst
-        $ chain
+fromChain cfg initState chain = undefined

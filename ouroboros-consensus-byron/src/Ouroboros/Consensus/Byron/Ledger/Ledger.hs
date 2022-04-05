@@ -86,6 +86,8 @@ import           Ouroboros.Consensus.Byron.Ledger.Conversions
 import           Ouroboros.Consensus.Byron.Ledger.HeaderValidation ()
 import           Ouroboros.Consensus.Byron.Ledger.PBFT
 import           Ouroboros.Consensus.Byron.Ledger.Serialisation
+import Ouroboros.Consensus.Ledger.Abstract (IsLedgerHD(applyChainTickLedgerResultHD))
+import Ouroboros.Consensus.Ledger.SupportsProtocol (LedgerSupportsProtocolHD)
 
 {-------------------------------------------------------------------------------
   LedgerState
@@ -170,6 +172,16 @@ data instance Ticked1 (LedgerState ByronBlock) mk = TickedByronLedgerState {
     }
   deriving (Generic, NoThunks)
 
+instance IsLedgerHD (LedgerState ByronBlock) where
+  applyChainTickLedgerResultHD cfg slotNo ByronLedgerState{..} = pureLedgerResult $
+      TickedByronLedgerState {
+          tickedByronLedgerState =
+            CC.applyChainTick cfg (toByronSlotNo slotNo) byronLedgerState
+        , untickedByronLedgerTransition =
+            byronLedgerTransition
+        }
+
+
 instance IsLedger (LedgerState ByronBlock) where
   type LedgerErr (LedgerState ByronBlock) = CC.ChainValidationError
 
@@ -239,6 +251,17 @@ instance ApplyBlock (LedgerState ByronBlock) ByronBlock where
 
   getBlockKeySets _ = polyEmptyLedgerTables
 
+instance ApplyBlockHD (LedgerState ByronBlock) ByronBlock where
+  applyBlockLedgerResultHD = fmap pureLedgerResult ..: applyByronBlock validationMode
+    where
+      validationMode = CC.fromBlockValidationMode CC.BlockValidation
+
+  reapplyBlockLedgerResultHD =
+          (pureLedgerResult . validationErrorImpossible)
+      ..: applyByronBlock validationMode
+    where
+      validationMode = CC.fromBlockValidationMode CC.NoBlockValidation
+
 data instance BlockQuery ByronBlock :: FootprintL -> Type -> Type where
   GetUpdateInterfaceState :: BlockQuery ByronBlock SmallL UPI.State
 
@@ -274,6 +297,8 @@ getProtocolParameters =
       CC.adoptedProtocolParameters
     . CC.cvsUpdateState
     . byronLedgerState
+
+instance LedgerSupportsProtocolHD ByronBlock
 
 instance LedgerSupportsProtocol ByronBlock where
   protocolLedgerView _cfg =

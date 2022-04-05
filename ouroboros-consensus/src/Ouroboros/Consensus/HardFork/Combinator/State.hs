@@ -27,6 +27,7 @@ module Ouroboros.Consensus.HardFork.Combinator.State (
   , reconstructSummaryLedger
     -- * Ledger specific functionality
   , extendToSlot
+  , extendToSlotLegacy
   ) where
 
 import           Prelude hiding (sequence)
@@ -255,6 +256,84 @@ extendToSlot ledgerCfg@HardForkLedgerConfig{..} slot ledgerSt@(HardForkState st)
                                              )
                              . translateLedgerStateWith f (History.boundEpoch currentEnd)
                              . forgetLedgerStateTables
+                             . unFlip
+                             . currentState
+                             $ cur
+            }
+        )
+
+    translate :: InPairs TranslateLedgerState xs
+    translate = InPairs.requiringBoth cfgs $
+                  translateLedgerState hardForkEraTranslation
+
+
+-- | Extend the telescope until the specified slot is within the era at the tip
+extendToSlotLegacy :: forall xs.
+                (CanHardFork xs)
+             => HardForkLedgerConfig xs
+             -> SlotNo
+             -> HardForkState (Flip LedgerState EmptyMK) xs -> HardForkState (Flip LedgerState EmptyMK) xs
+extendToSlotLegacy ledgerCfg@HardForkLedgerConfig{..} slot ledgerSt@(HardForkState st) =
+      HardForkState
+    . unI
+    . Telescope.extend
+        ( InPairs.hcmap proxySingle (\f -> Require $ \(K t)
+                                        -> Extend  $ \cur
+                                        -> I $ howExtend f t cur)
+        $ translate
+        )
+        (hczipWith
+           proxySingle
+           (fn .: whenExtend)
+           pcfgs
+           (getExactly (History.getShape hardForkLedgerConfigShape)))
+    $ st
+  where
+    pcfgs = getPerEraLedgerConfig hardForkLedgerConfigPerEra
+    cfgs  = hcmap proxySingle (completeLedgerConfig'' ei) pcfgs
+    ei    = epochInfoLedger ledgerCfg ledgerSt
+
+    -- Return the end of this era if we should transition to the next
+    whenExtend :: SingleEraBlock                      blk
+               => WrapPartialLedgerConfig             blk
+               -> K History.EraParams                 blk
+               -> Current (Flip LedgerState EmptyMK) blk
+               -> (Maybe :.: K History.Bound)         blk
+    whenExtend pcfg (K eraParams) cur = Comp $ K <$> do
+        transition <- singleEraTransition'
+                        pcfg
+                        eraParams
+                        (currentStart cur)
+                        (unFlip $ currentState cur)
+        let endBound = History.mkUpperBound
+                         eraParams
+                         (currentStart cur)
+                         transition
+        guard (slot >= History.boundSlot endBound)
+        return endBound
+
+    howExtend :: (SingleEraBlock blk')
+              => TranslateLedgerState blk blk'
+              -> History.Bound
+              -> Current (Flip LedgerState EmptyMK) blk
+              -> (K Past blk, Current (Flip LedgerState EmptyMK) blk')
+    howExtend f currentEnd cur = (
+          K Past {
+              pastStart    = currentStart cur
+            , pastEnd      = currentEnd
+            }
+        , Current {
+              currentStart = currentEnd
+            , currentState = Flip
+                             -- we need to bring back the values provided by
+                             -- previous translations. Note that if there is
+                             -- only one translation or if the previous
+                             -- translations don't add any new tables this will
+                             -- just be a no-op. See the haddock for
+                             -- 'translateLedgerTablesWith' for more
+                             -- information).
+                             . stowLedgerTables
+                             . translateLedgerStateWith f (History.boundEpoch currentEnd)
                              . unFlip
                              . currentState
                              $ cur

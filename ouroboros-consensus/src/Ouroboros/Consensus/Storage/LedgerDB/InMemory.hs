@@ -23,6 +23,7 @@
 
 -- TODO stylish haskell insists on deleting this pragma if placed in the group above.
 {-# LANGUAGE DerivingStrategies       #-}
+{-# LANGUAGE BangPatterns #-}
 
 
 module Ouroboros.Consensus.Storage.LedgerDB.InMemory (
@@ -91,7 +92,8 @@ import           Control.Monad.Reader hiding (ap)
 import           Data.Functor.Identity
 import           Data.Kind (Constraint, Type)
 import           Data.Word
---import qualified Debug.Trace
+import qualified Data.Map.Strict as Map
+
 import           GHC.Generics (Generic)
 import           GHC.Stack (HasCallStack)
 import           NoThunks.Class (NoThunks)
@@ -112,6 +114,7 @@ import           Ouroboros.Consensus.Storage.LedgerDB.Types (PushGoal (..),
 import           Ouroboros.Consensus.Util
 import           Ouroboros.Consensus.Util.CBOR (decodeWithOrigin)
 import           Ouroboros.Consensus.Util.Versioned
+import qualified Debug.Trace as TRACE
 
 {-------------------------------------------------------------------------------
   Ledger DB types
@@ -158,8 +161,8 @@ import           Ouroboros.Consensus.Util.Versioned
 -- > L3 |> []
 type LegacyLedgerDB l = AnchoredSeq
                                (WithOrigin SlotNo)
-                               (Checkpoint (l ValuesMK))
-                               (Checkpoint (l ValuesMK))
+                               (Checkpoint (l EmptyMK))
+                               (Checkpoint (l EmptyMK))
 
 -- | Type alias for the new-style database
 --
@@ -226,10 +229,10 @@ newtype Checkpoint l = Checkpoint {
     }
   deriving (Generic)
 
-deriving instance          Eq       (l ValuesMK) => Eq       (Checkpoint (l ValuesMK))
-deriving anyclass instance NoThunks (l ValuesMK) => NoThunks (Checkpoint (l ValuesMK))
+deriving instance          Eq       (l EmptyMK) => Eq       (Checkpoint (l EmptyMK))
+deriving anyclass instance NoThunks (l EmptyMK) => NoThunks (Checkpoint (l EmptyMK))
 
-instance ShowLedgerState l => Show (Checkpoint (l ValuesMK)) where
+instance ShowLedgerState l => Show (Checkpoint (l EmptyMK)) where
   showsPrec p (Checkpoint l) =
         showParen (p > 10)
       $ showString "Checkpoint " . showsLedgerState sMapKind l
@@ -250,14 +253,13 @@ instance GetTip (l EmptyMK) => Anchorable (WithOrigin SlotNo) (Checkpoint (l Emp
 ledgerDbWithAnchor ::
      ( TableStuff l
      , GetTip (l EmptyMK)
-     , GetTip (l ValuesMK)
      , StowableLedgerTables l
      , HasCallStack
      )
   => RunAlsoLegacy -> l EmptyMK -> LedgerDB l
 ledgerDbWithAnchor runAlsoLegacy anchor = LedgerDB {
     ledgerDbCheckpoints = case (isCandidateForUnstow anchor, runAlsoLegacy) of
-        (True , RunBoth) -> Just (Empty (Checkpoint (unstowLedgerTables anchor)))
+        (True , RunBoth) -> Just (Empty (Checkpoint anchor))
         (False, RunBoth) -> error "Requested to run with legacy DB but anchor loaded from disk has no in-mem UTxO"
         _                -> Nothing
     , ledgerDbChangelog   = emptyDbChangeLog anchor
@@ -377,11 +379,11 @@ toRealPoint (Weaken ap)      = toRealPoint ap
 --
 -- We take in the entire 'LedgerDB' because we record that as part of errors.
 applyBlock :: forall m c l blk
-            . (ApplyBlock l blk, TickedTableStuff l, Monad m, c, HasCallStack)
+            . (ApplyBlock l blk, ApplyBlockHD l blk, TickedTableStuff l, Monad m, c, HasCallStack)
            => LedgerCfg l
            -> Ap m l blk c
            -> LedgerDB l
-           -> m (Maybe (l ValuesMK), l TrackingMK)
+           -> m (Maybe (l EmptyMK), l TrackingMK)
 applyBlock cfg ap db = case ap of
     Weaken ap' ->
         applyBlock cfg ap' db
@@ -389,23 +391,29 @@ applyBlock cfg ap db = case ap of
       legacyLs' <- mapM (`legacyApplyBlock` ap) legacyLs
       modernLs' <- modernApplyBlock ap
 
-      let _ = legacyLs' :: Maybe (l TrackingMK)
+      let _ = legacyLs' :: Maybe (l EmptyMK)
           _ = modernLs' :: l TrackingMK
 
-          legacyValues :: Maybe (l ValuesMK)
-          legacyValues = forgetLedgerStateTracking <$> legacyLs'
+          legacyTracking :: Maybe (l TrackingMK)
+          legacyTracking = do
+            l  <- projectLedgerTables . unstowLedgerTables <$> legacyLs
+            l' <-                       unstowLedgerTables <$> legacyLs'
+            return $ zipOverLedgerTables (flip calculateDifference) l' l
 
-          _modernValues ::l ValuesMK
+          legacyValues :: Maybe (l ValuesMK)
+          legacyValues = forgetLedgerStateTracking <$> legacyTracking
+
+          _modernValues :: l ValuesMK
           _modernValues = forgetLedgerStateTracking modernLs'
 
           legacyDiff :: Maybe (LedgerTables l DiffMK)
-          legacyDiff = projectLedgerTables . trackingTablesToDiffs <$> legacyLs'
+          legacyDiff = projectLedgerTables . trackingTablesToDiffs <$> legacyTracking
 
           modernDiff :: LedgerTables l DiffMK
           modernDiff = projectLedgerTables $ trackingTablesToDiffs modernLs'
 
           mixViaLegacy :: LedgerTables l DiffMK -> Maybe (LedgerTables l ValuesMK)
-          mixViaLegacy diff = projectLedgerTables . flip applyDiffsLedgerTables diff <$> legacyLs
+          mixViaLegacy diff = projectLedgerTables . flip applyDiffsLedgerTables diff . unstowLedgerTables <$>  legacyLs
 
           -- Ensure the given tables are empty if the old legacy state has no
           -- tables
@@ -432,26 +440,26 @@ applyBlock cfg ap db = case ap of
             . flip withLedgerTables polyEmptyLedgerTables
 
           checks =
-            case (,,) <$> legacyLs' <*> legacyDiff <*> legacyValues of
+            case (,,) <$> legacyTracking <*> legacyDiff <*> legacyValues of
               Just (legLs', legDiff, legValues) -> [
                   annihilate              legLs' == annihilate              modernLs'
                 , forgetLedgerStateTables legLs' == forgetLedgerStateTables modernLs'
-                , modernDiff                     == legDiff
+                , modernDiff                     ==                         legDiff
                 , asTypeOf True $ idViaLegacy legValues     == mixViaLegacy modernDiff
                 ]
               _ -> [True]
 
       when (any not checks) $ error $ show checks
 
-      return (legacyValues, modernLs')
+      return (legacyLs', modernLs')
   where
     _modernLs :: l EmptyMK
     _modernLs = ledgerDbCurrent db
 
-    legacyLs :: Maybe (l ValuesMK)
+    legacyLs :: Maybe (l EmptyMK)
     legacyLs = ledgerDbCurrentValues db
 
-    legacyApplyBlock :: l ValuesMK -> Ap m l blk c -> m (l TrackingMK)
+    legacyApplyBlock :: l EmptyMK -> Ap m l blk c -> m (l EmptyMK)
     legacyApplyBlock legLs = \case
       ReapplyVal b -> return $ tickThenReapply cfg b legLs
       ApplyVal b ->
@@ -478,29 +486,33 @@ applyBlock cfg ap db = case ap of
     modernApplyBlock :: Ap m l blk c -> m (l TrackingMK)
     modernApplyBlock = \case
       ReapplyVal b -> withBlockReadSets b $ \lh ->
-          return $ tickThenReapply cfg b lh
+          ( either (\e -> error (show (blockRealPoint b) <> " " <> show e)) return
+               $ runExcept
+               $ tickThenApplyHD cfg b lh)
 
       ApplyVal b -> withBlockReadSets b $ \lh ->
                ( either (throwLedgerError db (blockRealPoint b)) return
                $ runExcept
-               $ tickThenApply cfg b lh)
+               $ tickThenApplyHD cfg b lh)
 
       ReapplyRef r  -> do
         b <- resolveBlock r -- TODO: ask: would it make sense to recursively call applyBlock using ReapplyVal?
 
         withBlockReadSets b $ \lh ->
-          return $ tickThenReapply cfg b lh
+          return $ tickThenReapplyHD cfg b lh
 
       ApplyRef r -> do
         b <- resolveBlock r
 
         withBlockReadSets b $ \lh ->
           either (throwLedgerError db (blockRealPoint b)) return $ runExcept $
-             tickThenApply cfg b lh
+             tickThenApplyHD cfg b lh
 
       -- A value of @Weaken@ will not make it to this point, as @applyBlock@ will recurse until it fully unwraps.
       Weaken _ -> error "unreachable"
 
+    ifT b msg what = if (blockSlot b > 4492850) then TRACE.trace msg what else what
+    
     withBlockReadSets
       :: ReadsKeySets m l
       => blk
@@ -508,9 +520,12 @@ applyBlock cfg ap db = case ap of
       -> m (l TrackingMK)
     withBlockReadSets b f = do
       let ks = getBlockKeySets b :: TableKeySets l
-      let aks = rewindTableKeySets (ledgerDbChangelog db) ks :: RewoundTableKeySets l
-      urs <- readDb aks
-      case withHydratedLedgerState urs f of
+      ifT b ("blockKeySets: " <> showsLedgerState sMapKind ks "") $ return ()
+      let aks@(RewoundTableKeySets s rw) = rewindTableKeySets (ledgerDbChangelog db) ks :: RewoundTableKeySets l
+      ifT b ("rewindTableKeySets: slot " <> show s <> ", vals: " <> showsLedgerState sMapKind rw "") $ return ()      
+      urs@(UnforwardedReadSets s' v') <- readDb aks
+      ifT b ("urs: slot: " <> show s' <> ", values: " <> showsLedgerState sMapKind v' "") $ return ()            
+      case withHydratedLedgerState urs f b rw of
         Left err ->
           -- We performed the rewind;read;forward sequence in this function. So
           -- the forward operation should not fail. If this is the case we're in
@@ -528,9 +543,11 @@ applyBlock cfg ap db = case ap of
     withHydratedLedgerState
       :: UnforwardedReadSets l
       -> (l ValuesMK -> a)
+      -> blk
+      -> LedgerTables l RewoundMK
       -> Either (WithOrigin SlotNo, WithOrigin SlotNo) a
-    withHydratedLedgerState urs f =
-          (\rs -> f $ withLedgerTables (ledgerDbCurrent db) rs)
+    withHydratedLedgerState urs f b aks =
+      (\rs -> f $ withLedgerTables (ledgerDbCurrent db) (zipLedgerTables (\tbs@(ApplyValuesMK (UtxoValues vals)) (ApplyRewoundMK (RewoundKeys (UtxoKeys abse) _ _)) -> (TRACE.trace (show $ Map.size $ vals `Map.restrictKeys` abse)) tbs) rs aks))
       <$> forwardTableKeySets (ledgerDbChangelog db) urs
 
 {-------------------------------------------------------------------------------
@@ -661,7 +678,7 @@ defaultReadKeySets f dbReader = runReaderT (runDbReader dbReader) f
 -- | The ledger state at the tip of the chain
 --
 -- TODO This won't work if @not 'runDual'@.
-ledgerDbCurrentValues :: GetTip (l ValuesMK) => LedgerDB l -> Maybe (l ValuesMK)
+ledgerDbCurrentValues :: GetTip (l EmptyMK) => LedgerDB l -> Maybe (l EmptyMK)
 ledgerDbCurrentValues =
   fmap (either unCheckpoint unCheckpoint
         . AS.head)
@@ -705,11 +722,10 @@ ledgerDbAnchor =
 ledgerDbOldest :: forall l.
      ( StandardHash (l EmptyMK)
      , GetTip (l EmptyMK)
-     , StowableLedgerTables l
      )
   => LedgerDB l -> l EmptyMK
 ledgerDbOldest db =
-    case stuffedLegacyAnchor of
+    case legacyAnchor of
       Nothing  -> immAnchor
       Just sla -> Exn.assert (isFlushed sla) sla
   where
@@ -723,10 +739,10 @@ ledgerDbOldest db =
     isFlushed :: l EmptyMK -> Bool
     isFlushed sla = castPoint (getTip sla) == getTip immAnchor
 
-    stuffedLegacyAnchor :: Maybe (l EmptyMK)
-    stuffedLegacyAnchor = stowLedgerTables <$> legacyAnchor
+    -- stuffedLegacyAnchor :: Maybe (l EmptyMK)
+    -- stuffedLegacyAnchor = stowLedgerTables <$> legacyAnchor
 
-    legacyAnchor :: Maybe (l ValuesMK)
+    legacyAnchor :: Maybe (l EmptyMK)
     legacyAnchor =
           unCheckpoint
       .   AS.anchor
@@ -745,7 +761,7 @@ ledgerDbSnapshots LedgerDB{..} = case ledgerDbCheckpoints of
     $ AS.toNewestFirst legacyDb <> [AS.anchor legacyDb]
 
 -- | How many blocks can we currently roll back?
-ledgerDbMaxRollback :: (GetTip (l ValuesMK), GetTip (l EmptyMK)) => LedgerDB l -> Word64
+ledgerDbMaxRollback :: (GetTip (l EmptyMK)) =>LedgerDB l -> Word64
 ledgerDbMaxRollback LedgerDB{..} =
   let
     old = fromIntegral . AS.length <$> ledgerDbCheckpoints
@@ -827,7 +843,7 @@ ledgerDbBimap f g =
 -- | Prune snapshots until at we have at most @k@ snapshots in the LedgerDB,
 -- excluding the snapshots stored at the anchor.
 ledgerDbPrune ::
-     (GetTip (l EmptyMK), GetTip (l ValuesMK))
+     (GetTip (l EmptyMK))
   => SecurityParam -> LedgerDB l -> LedgerDB l
 ledgerDbPrune k db = db {
       ledgerDbCheckpoints =
@@ -848,11 +864,11 @@ ledgerDbPrune k db = db {
 pushLedgerState ::
      (IsLedger l, TickedTableStuff l)
   => SecurityParam
-  -> (Maybe (l ValuesMK), l TrackingMK) -- ^ Updated ledger state
+  -> (Maybe (l EmptyMK), l TrackingMK) -- ^ Updated ledger state
   -> LedgerDB l -> LedgerDB l
 pushLedgerState secParam (currentOld', currentNew') db@LedgerDB{..}  =
     ledgerDbPrune secParam $ db {
-        ledgerDbCheckpoints = (AS.:>) <$> ledgerDbCheckpoints <*> (Checkpoint <$> currentOld')
+        ledgerDbCheckpoints = (AS.:>) <$> ledgerDbCheckpoints <*> (Checkpoint  <$> currentOld')
       , ledgerDbChangelog   =
           extendDbChangelog
             ledgerDbChangelog
@@ -867,8 +883,8 @@ pushLedgerState secParam (currentOld', currentNew') db@LedgerDB{..}  =
 --
 -- Returns 'Nothing' if maximum rollback is exceeded.
 rollback :: forall l.
-     (GetTip (l ValuesMK), GetTip (l EmptyMK), TableStuff l)
-  => Word64 -> LedgerDB l -> Maybe (LedgerDB l)
+     ( GetTip (l EmptyMK), TableStuff l)
+  =>Word64 -> LedgerDB l -> Maybe (LedgerDB l)
 rollback n db@LedgerDB{..}
     | n <= ledgerDbMaxRollback db
     = Just db {
@@ -896,7 +912,7 @@ data ExceededRollback = ExceededRollback {
     }
 
 ledgerDbPush :: forall m c l blk
-              . (ApplyBlock l blk, TickedTableStuff l, Monad m, c, HasCallStack)
+              . (ApplyBlock l blk, ApplyBlockHD l blk, TickedTableStuff l, Monad m, c, HasCallStack)
              => LedgerDbCfg l
              -> Ap m l blk c -> LedgerDB l -> m (LedgerDB l)
 ledgerDbPush cfg ap db =
@@ -905,7 +921,7 @@ ledgerDbPush cfg ap db =
 
 -- | Push a bunch of blocks (oldest first)
 ledgerDbPushMany ::
-     forall m c l blk . (ApplyBlock l blk, TickedTableStuff l, Monad m, c, HasCallStack)
+     forall m c l blk . (ApplyBlock l blk, ApplyBlockHD l blk, TickedTableStuff l, Monad m, c, HasCallStack)
   => (Pushing blk -> m ())
   -> LedgerDbCfg l
   -> [Ap m l blk c] -> LedgerDB l -> m (LedgerDB l)
@@ -917,7 +933,7 @@ ledgerDbPushMany trace cfg aps initDb = (repeatedlyM pushAndTrace) aps initDb
       ledgerDbPush cfg ap db
 
 -- | Switch to a fork
-ledgerDbSwitch :: (ApplyBlock l blk, TickedTableStuff l, Monad m, c, HasCallStack)
+ledgerDbSwitch :: (ApplyBlockHD l blk, TickedTableStuff l, Monad m, c, HasCallStack)
                => LedgerDbCfg l
                -> Word64          -- ^ How many blocks to roll back
                -> (UpdateLedgerDbTraceEvent blk -> m ())
@@ -972,17 +988,17 @@ instance IsLedger l => GetTip (LedgerDB l) where
 pureBlock :: blk -> Ap m l blk (ReadsKeySets m l)
 pureBlock = ReapplyVal
 
-ledgerDbPush' :: (ApplyBlock l blk, TickedTableStuff l, ReadsKeySets Identity l, HasCallStack)
+ledgerDbPush' :: (ApplyBlockHD l blk, TickedTableStuff l, ReadsKeySets Identity l, HasCallStack)
               => LedgerDbCfg l -> blk -> LedgerDB l -> LedgerDB l
 ledgerDbPush' cfg b = runIdentity . ledgerDbPush cfg (pureBlock b)
 
-ledgerDbPushMany' :: (ApplyBlock l blk, TickedTableStuff l, ReadsKeySets Identity l, HasCallStack)
+ledgerDbPushMany' :: (ApplyBlockHD l blk, TickedTableStuff l, ReadsKeySets Identity l, HasCallStack)
                   => LedgerDbCfg l -> [blk] -> LedgerDB l -> LedgerDB l
 ledgerDbPushMany' cfg bs =
   runIdentity . ledgerDbPushMany (const $ pure ()) cfg (map pureBlock bs)
 
 ledgerDbSwitch' :: forall l blk
-                 . (ApplyBlock l blk, TickedTableStuff l, ReadsKeySets Identity l, HasCallStack)
+                 . (ApplyBlockHD l blk, TickedTableStuff l, ReadsKeySets Identity l, HasCallStack)
                 => LedgerDbCfg l
                 -> Word64 -> [blk] -> LedgerDB l -> Maybe (LedgerDB l)
 ledgerDbSwitch' cfg n bs db =

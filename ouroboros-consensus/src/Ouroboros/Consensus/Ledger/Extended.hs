@@ -174,6 +174,29 @@ instance ( IsLedger (LedgerState  blk)
 
       ledgerResult = applyChainTickLedgerResult lcfg slot ledger
 
+instance ( LedgerSupportsProtocolHD blk
+         )
+      => IsLedgerHD (ExtLedgerState blk) where
+
+  applyChainTickLedgerResultHD cfg slot (ExtLedgerState ledger header) =
+      castLedgerResult ledgerResult <&> \tickedLedgerState ->
+      let tickedLedgerView :: Ticked (LedgerView (BlockProtocol blk))
+          tickedLedgerView = protocolLedgerView lcfg tickedLedgerState
+
+          tickedHeaderState :: Ticked (HeaderState blk)
+          tickedHeaderState =
+              tickHeaderState
+                (configConsensus $ getExtLedgerCfg cfg)
+                tickedLedgerView
+                slot
+                header
+      in TickedExtLedgerState {..}
+    where
+      lcfg :: LedgerConfig blk
+      lcfg = configLedger $ getExtLedgerCfg cfg
+
+      ledgerResult = applyChainTickLedgerResultHD lcfg slot ledger
+
 instance (LedgerSupportsProtocol blk, TableStuff (LedgerState blk)) => TableStuff (ExtLedgerState blk) where
 
   newtype LedgerTables (ExtLedgerState blk) mk = ExtLedgerStateTables (LedgerTables (LedgerState blk) mk)
@@ -249,6 +272,42 @@ instance (LedgerSupportsProtocol blk) => ApplyBlock (ExtLedgerState blk) blk whe
           tickedHeaderState
 
   getBlockKeySets = ExtLedgerStateTables . getBlockKeySets
+
+instance (ApplyBlock (ExtLedgerState blk) blk
+         , IsLedgerHD (ExtLedgerState blk)
+         , ApplyBlockHD (LedgerState blk) blk
+         , LedgerSupportsProtocol blk) => ApplyBlockHD (ExtLedgerState blk) blk where
+
+  applyBlockLedgerResultHD cfg blk TickedExtLedgerState{..} = do
+    ledgerResult <-
+        withExcept ExtValidationErrorLedger
+      $ applyBlockLedgerResultHD
+          (configLedger $ getExtLedgerCfg cfg)
+          blk
+          tickedLedgerState
+    hdr <-
+        withExcept ExtValidationErrorHeader
+      $ validateHeader @blk
+          (getExtLedgerCfg cfg)
+          tickedLedgerView
+          (getHeader blk)
+          tickedHeaderState
+    pure $ (\l -> ExtLedgerState l hdr) <$> castLedgerResult ledgerResult
+
+  reapplyBlockLedgerResultHD cfg blk TickedExtLedgerState{..} =
+      (\l -> ExtLedgerState l hdr) <$> castLedgerResult ledgerResult
+    where
+      ledgerResult =
+        reapplyBlockLedgerResultHD
+          (configLedger $ getExtLedgerCfg cfg)
+          blk
+          tickedLedgerState
+      hdr      =
+        revalidateHeader
+          (getExtLedgerCfg cfg)
+          tickedLedgerView
+          (getHeader blk)
+          tickedHeaderState
 
 instance
      ( LedgerSupportsProtocol blk

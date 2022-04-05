@@ -38,9 +38,11 @@ module Ouroboros.Consensus.Ledger.Basics (
   , pureLedgerResult
     -- * Definition of a ledger independent of a choice of block
   , IsLedger (..)
+  , IsLedgerHD (..)
   , LedgerCfg
   , applyChainTick
   , noNewTickingValues
+  , applyChainTickHD
     -- * Link block to its ledger
   , LedgerConfig
   , LedgerError
@@ -158,6 +160,7 @@ import           Ouroboros.Consensus.Util.Singletons
 import           Ouroboros.Consensus.Storage.LedgerDB.HD
 import           Ouroboros.Consensus.Storage.LedgerDB.HD.BackingStore
                      (RangeQuery)
+import qualified Debug.Trace as TRACE
 
 {-------------------------------------------------------------------------------
   Tip
@@ -314,6 +317,13 @@ class ( -- Requirements on the ledger state itself
        LedgerCfg l
     -> SlotNo
     -> l EmptyMK
+    -> LedgerResult l (Ticked1 l EmptyMK)
+
+class IsLedger l => IsLedgerHD l where
+  applyChainTickLedgerResultHD ::
+       LedgerCfg l
+    -> SlotNo
+    -> l EmptyMK
     -> LedgerResult l (Ticked1 l ValuesMK)
 
 -- | 'lrResult' after 'applyChainTickLedgerResult'
@@ -322,8 +332,16 @@ applyChainTick ::
   => LedgerCfg l
   -> SlotNo
   -> l EmptyMK
-  -> Ticked1 l ValuesMK
+  -> Ticked1 l EmptyMK
 applyChainTick = lrResult ..: applyChainTickLedgerResult
+
+applyChainTickHD ::
+     IsLedgerHD l
+  => LedgerCfg l
+  -> SlotNo
+  -> l EmptyMK
+  -> Ticked1 l ValuesMK
+applyChainTickHD = lrResult ..: applyChainTickLedgerResultHD
 
 -- | When applying a block that is not on an era transition, ticking won't
 -- generate new values, so this function can be used to wrap the call to the
@@ -889,8 +907,9 @@ calculateDifference ::
   => ValuesMK k v
   -> ValuesMK k v
   -> TrackingMK k v
-calculateDifference (ApplyValuesMK before) (ApplyValuesMK after) =
-    ApplyTrackingMK after (differenceUtxoValues before after)
+calculateDifference (ApplyValuesMK before@(UtxoValues b)) (ApplyValuesMK after@(UtxoValues a)) =
+    ApplyTrackingMK after -- (TRACE.trace ("before: " <> show (Map.size b) <> " and after: " <> show (Map.size a))
+                           $ differenceUtxoValues before after
 
 {-------------------------------------------------------------------------------
   Link block to its ledger

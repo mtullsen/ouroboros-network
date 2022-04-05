@@ -129,7 +129,7 @@ mkMempool mpEnv = Mempool
                     cfg
                     (ForgeInKnownSlot slot
                       $ mappendValuesTicked (projectLedgerTables $ ledgerState ls')
-                      $ applyChainTick cfg slot
+                      $ applyChainTickHD cfg slot
                       $ forgetLedgerStateTables
                       $ ledgerState ls')
                     capacityOverride
