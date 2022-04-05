@@ -134,6 +134,7 @@ import           Control.Monad (when)
 import           Data.Bifunctor (bimap)
 import           Data.Kind (Type)
 import qualified Data.Map as Map
+import qualified Data.Set as Set
 import           Data.Monoid (All (..), Sum (..))
 import           Data.Typeable (Typeable)
 import           Data.Word (Word8)
@@ -420,6 +421,19 @@ class ( ShowLedgerState (LedgerTables l)
     -> LedgerTables l mk1
     -> LedgerTables l mk2
     -> LedgerTables l mk3
+
+  zipLedgerTables2 ::
+       (forall k v.
+            Ord k
+         => mk1 k v
+         -> mk2 k v
+         -> mk3 k v
+         -> mk4 k v
+       )
+    -> LedgerTables l mk1
+    -> LedgerTables l mk2
+    -> LedgerTables l mk3
+    -> LedgerTables l mk4
 
   foldLedgerTables ::
        Monoid m

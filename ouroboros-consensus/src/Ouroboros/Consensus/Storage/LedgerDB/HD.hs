@@ -30,6 +30,7 @@ module Ouroboros.Consensus.Storage.LedgerDB.HD (
     -- * Combinators
   , RewoundKeys (..)
   , forwardValues
+  , forwardValues'
   , mapRewoundKeys
   , restrictValues
   , rewindKeys
@@ -320,33 +321,32 @@ rewindKeys (UtxoKeys query) (UtxoDiff diffs) =
       UedsDel       -> False
       UedsInsAndDel -> True
 
+forwardValues a b = forwardValues' a (UtxoKeys Set.empty) b
+
 -- | Transport a set of values (eg 'rewindPresent' unioned with the fetch of
 -- 'rewoundUnknown' from backing store) by applying a valid difference
 --
 -- Note that this fails via 'error' if the diff is invalid, eg it deletes a key
 -- that is not present in the argument or inserts a key that is already in the
 -- argument.
-forwardValues :: (Ord k, HasCallStack) => UtxoValues k v -> UtxoDiff k v -> UtxoValues k v
-forwardValues (UtxoValues values) (UtxoDiff diffs) =
+forwardValues' :: forall k v. (Ord k, HasCallStack) => UtxoValues k v -> UtxoKeys k v -> UtxoDiff k v -> UtxoValues k v
+forwardValues' (UtxoValues values) (UtxoKeys keys) (UtxoDiff diffs) =
       UtxoValues
-    $ MapMerge.merge
-        MapMerge.preserveMissing
-        (MapMerge.mapMaybeMissing     newKeys)
-        (MapMerge.zipWithMaybeMatched oldKeys)
-        values
-        diffs
+    $ Map.mapMaybe id (Map.fromSet g keys) `Map.union` Map.mapMaybeWithKey f values
   where
-    newKeys :: k -> UtxoEntryDiff v -> Maybe v
-    newKeys _k (UtxoEntryDiff v diffState) = case diffState of
-      UedsIns       -> Just v
-      UedsInsAndDel -> Nothing
-      UedsDel       -> Nothing -- TODO error "impossible! delete of missing key"
+    f :: k -> v -> Maybe v
+    f k v = case Map.lookup k diffs of
+      Nothing                              -> Just v
+      Just (UtxoEntryDiff _ UedsIns)       -> error "duplicate insert!"
+      Just (UtxoEntryDiff _ UedsInsAndDel) -> error "duplicate insert!"
+      Just (UtxoEntryDiff _ UedsDel)       -> Nothing
 
-    oldKeys :: k -> v -> UtxoEntryDiff v -> Maybe v
-    oldKeys _k _v1 (UtxoEntryDiff _v2 diffState) = case diffState of
-      UedsDel       -> Nothing
-      UedsIns       -> error "impossible! duplicate insert of key"
-      UedsInsAndDel -> error "impossible! duplicate insert of key"
+    g :: k -> Maybe v
+    g k = case Map.lookup k diffs of
+      Nothing                              -> Nothing
+      Just (UtxoEntryDiff v UedsIns)       -> Just v
+      Just (UtxoEntryDiff _ UedsInsAndDel) -> Nothing
+      Just (UtxoEntryDiff _ UedsDel)       -> error "deleted entry that was not in UTxO"
 
 {-------------------------------------------------------------------------------
   Sequence of diffs

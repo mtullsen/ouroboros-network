@@ -284,6 +284,9 @@ instance ShelleyBasedEra era => TableStuff (LedgerState (ShelleyBlock era)) wher
   zipLedgerTables f (ShelleyLedgerTables utxoL) (ShelleyLedgerTables utxoR) =
       ShelleyLedgerTables (f utxoL utxoR)
 
+  zipLedgerTables2 f (ShelleyLedgerTables utxoL) (ShelleyLedgerTables utxoM) (ShelleyLedgerTables utxoR) =
+      ShelleyLedgerTables (f utxoL utxoM utxoR)
+
   foldLedgerTables f (ShelleyLedgerTables utxo) = f utxo
 
   foldLedgerTables2 f (ShelleyLedgerTables utxo1) (ShelleyLedgerTables utxo2) = f utxo1 utxo2

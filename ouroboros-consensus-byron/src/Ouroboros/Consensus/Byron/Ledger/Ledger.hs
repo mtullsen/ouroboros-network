@@ -210,6 +210,7 @@ instance TableStuff (LedgerState ByronBlock) where
   mapLedgerTables      _f                     NoByronLedgerTables = NoByronLedgerTables
   traverseLedgerTables _f                     NoByronLedgerTables = pure NoByronLedgerTables
   zipLedgerTables      _f NoByronLedgerTables NoByronLedgerTables = NoByronLedgerTables
+  zipLedgerTables2     _f NoByronLedgerTables NoByronLedgerTables NoByronLedgerTables = NoByronLedgerTables
   foldLedgerTables     _f                     NoByronLedgerTables = mempty
   foldLedgerTables2    _f NoByronLedgerTables NoByronLedgerTables = mempty
 

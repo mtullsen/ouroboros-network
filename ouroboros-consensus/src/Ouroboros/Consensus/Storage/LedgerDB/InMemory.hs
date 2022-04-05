@@ -523,8 +523,7 @@ applyBlock cfg ap db = case ap of
       ifT b ("blockKeySets: " <> showsLedgerState sMapKind ks "") $ return ()
       let aks@(RewoundTableKeySets s rw) = rewindTableKeySets (ledgerDbChangelog db) ks :: RewoundTableKeySets l
       ifT b ("rewindTableKeySets: slot " <> show s <> ", vals: " <> showsLedgerState sMapKind rw "") $ return ()      
-      urs@(UnforwardedReadSets s' v') <- readDb aks
-      ifT b ("urs: slot: " <> show s' <> ", values: " <> showsLedgerState sMapKind v' "") $ return ()            
+      urs <- readDb aks
       case withHydratedLedgerState urs f b rw of
         Left err ->
           -- We performed the rewind;read;forward sequence in this function. So
@@ -579,6 +578,7 @@ rewindTableKeySets dblog = \keys ->
 data UnforwardedReadSets l = UnforwardedReadSets {
     ursSeqNo  :: !(WithOrigin SlotNo)
   , ursValues :: !(LedgerTables l ValuesMK)
+  , ursKeys   :: !(LedgerTables l KeysMK)
   }
 
 forwardTableKeySets ::
@@ -587,10 +587,10 @@ forwardTableKeySets ::
   -> UnforwardedReadSets l
   -> Either (WithOrigin SlotNo, WithOrigin SlotNo)
             (TableReadSets l)
-forwardTableKeySets dblog = \(UnforwardedReadSets seqNo' values) ->
+forwardTableKeySets dblog = \(UnforwardedReadSets seqNo' values keys) ->
     if seqNo /= seqNo' then Left (seqNo, seqNo') else
     Right
-      $ zipLedgerTables forward values
+      $ zipLedgerTables2 forward values keys
       $ changelogDiffs dblog
   where
     seqNo = changelogDiffAnchor dblog
@@ -598,10 +598,11 @@ forwardTableKeySets dblog = \(UnforwardedReadSets seqNo' values) ->
     forward ::
          Ord k
       => ApplyMapKind ValuesMK  k v
+      -> ApplyMapKind KeysMK    k v
       -> ApplyMapKind SeqDiffMK k v
       -> ApplyMapKind ValuesMK  k v
-    forward (ApplyValuesMK values) (ApplySeqDiffMK diffs) =
-      ApplyValuesMK $ forwardValues values (cumulativeDiffSeqUtxoDiff diffs)
+    forward (ApplyValuesMK values) (ApplyKeysMK keys) (ApplySeqDiffMK diffs) =
+      ApplyValuesMK $ forwardValues' values keys (cumulativeDiffSeqUtxoDiff diffs)
 
 ledgerDbVolatileCheckpoints ::
      LedgerDB l
@@ -665,8 +666,8 @@ instance
      ReadsKeySets Identity (LedgerState blk)
   => ReadsKeySets Identity (Extended.ExtLedgerState blk) where
   readDb (RewoundTableKeySets seqNo (Extended.ExtLedgerStateTables rew)) = do
-      UnforwardedReadSets seqNo' values <- readDb (RewoundTableKeySets seqNo rew)
-      pure $ UnforwardedReadSets seqNo' (Extended.ExtLedgerStateTables values)
+      UnforwardedReadSets seqNo' values keys <- readDb (RewoundTableKeySets seqNo rew)
+      pure $ UnforwardedReadSets seqNo' (Extended.ExtLedgerStateTables values) (Extended.ExtLedgerStateTables keys)
 
 defaultReadKeySets :: TypeOf_readDB m l -> DbReader m l a -> m a
 defaultReadKeySets f dbReader = runReaderT (runDbReader dbReader) f
