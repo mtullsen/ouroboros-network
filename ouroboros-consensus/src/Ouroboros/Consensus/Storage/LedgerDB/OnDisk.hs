@@ -521,8 +521,7 @@ restoreBackingStore (SomeHasFS hasFS) snapshot = do
     -- '_tablesPath'.
 
     store <- HD.newTVarBackingStore
-               (\l1 l2 -> zipLedgerTables lookup_ (mapLedgerTables (\tbs@(ApplyKeysMK (HD.UtxoKeys keys)) -> TRACE.trace ("Number of requested keys: " <> show (Set.size keys)) tbs) l1)
-                                                  (mapLedgerTables (\tbs@(ApplyValuesMK (HD.UtxoValues vals)) -> TRACE.trace ("Number of vals in the store: " <> show (Map.size vals)) tbs) l2))
+               (zipLedgerTables lookup_)
                (\rq values -> case HD.rqPrev rq of
                    Nothing   -> mapLedgerTables (rangeRead0_ (HD.rqCount rq))      values
                    Just keys -> zipLedgerTables (rangeRead_  (HD.rqCount rq)) keys values
@@ -546,8 +545,7 @@ newBackingStore ::
   -> m (LedgerBackingStore m l)
 newBackingStore _someHasFS tables = do
     store <- HD.newTVarBackingStore
-               (\l1 l2 -> zipLedgerTables lookup_ (mapLedgerTables (\tbs@(ApplyKeysMK (HD.UtxoKeys keys)) -> TRACE.trace ("Number of requested keys: " <> show (Set.size keys)) tbs) l1)
-                                                  (mapLedgerTables (\tbs@(ApplyValuesMK (HD.UtxoValues vals)) -> TRACE.trace ("Number of vals in the store: " <> show (Map.size vals)) tbs) l2))
+               (zipLedgerTables lookup_)
                (\rq values -> case HD.rqPrev rq of
                    Nothing   -> mapLedgerTables (rangeRead0_ (HD.rqCount rq))      values
                    Just keys -> zipLedgerTables (rangeRead_  (HD.rqCount rq)) keys values
