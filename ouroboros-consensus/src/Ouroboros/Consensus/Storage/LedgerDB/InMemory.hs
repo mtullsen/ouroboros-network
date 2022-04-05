@@ -547,7 +547,7 @@ applyBlock cfg ap db = case ap of
       -> LedgerTables l RewoundMK
       -> Either (WithOrigin SlotNo, WithOrigin SlotNo) a
     withHydratedLedgerState urs f b aks =
-      (\rs -> f $ withLedgerTables (ledgerDbCurrent db) (zipLedgerTables (\tbs@(ApplyValuesMK (UtxoValues vals)) (ApplyRewoundMK (RewoundKeys (UtxoKeys abse) _ _)) -> (TRACE.trace (show $ Map.size $ vals `Map.restrictKeys` abse)) tbs) rs aks))
+      (\rs -> f $ withLedgerTables (ledgerDbCurrent db) (mapLedgerTables (\tbs@(ApplyValuesMK (UtxoValues vals)) -> (TRACE.trace (show $ Map.size $ vals) tbs) rs))
       <$> forwardTableKeySets (ledgerDbChangelog db) urs
 
 {-------------------------------------------------------------------------------
