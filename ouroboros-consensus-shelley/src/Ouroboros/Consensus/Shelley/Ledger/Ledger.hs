@@ -68,7 +68,7 @@ import           NoThunks.Class (NoThunks (..))
 import           Cardano.Binary (FromCBOR (..), ToCBOR (..), enforceSize)
 import           Cardano.Slotting.EpochInfo
 
-import qualified Debug.Trace as TRACE
+--import qualified Debug.Trace as TRACE
 import           Ouroboros.Consensus.Block
 import           Ouroboros.Consensus.BlockchainTime.WallClock.Types
 import           Ouroboros.Consensus.Config
@@ -616,7 +616,8 @@ instance ShelleyBasedEra era
       $ ApplyKeysMK
       $ HD.UtxoKeys
       $ foldMap getShelleyTxInputs
-      $ Core.fromTxSeq @era (TRACE.trace ("txs :" <> show txs) txs)
+      $ Core.fromTxSeq @era -- (TRACE.trace ("txs :" <> show txs)
+                             txs -- )
     where
       ShelleyBlock { shelleyBlockRaw = SL.Block _ txs } = blk
 

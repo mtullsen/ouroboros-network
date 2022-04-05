@@ -50,7 +50,7 @@ import           Ouroboros.Consensus.Block.Abstract
 import           Ouroboros.Consensus.Ledger.Basics
 import           Ouroboros.Consensus.Ticked
 import           Ouroboros.Consensus.Util (repeatedly, repeatedlyM, (..:))
--- import qualified Debug.Trace as TRACE
+import qualified Debug.Trace as TRACE
 
 -- | " Validated " transaction or block
 --
@@ -224,7 +224,7 @@ tickThenApplyLedgerResultHD cfg blk l = do
                 . projectLedgerTablesTicked
                 . lrResult
                 $ lrTick
-  pure LedgerResult {
+  pure $ TRACE.trace (show $ blockSlot blk) $ LedgerResult {
       lrEvents = lrEvents lrTick <> lrEvents lrBlock
     , lrResult = mappendTracking tickDiffs $ lrResult lrBlock
     }

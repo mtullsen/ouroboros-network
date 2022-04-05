@@ -114,7 +114,7 @@ import           Ouroboros.Consensus.Storage.LedgerDB.Types (PushGoal (..),
 import           Ouroboros.Consensus.Util
 import           Ouroboros.Consensus.Util.CBOR (decodeWithOrigin)
 import           Ouroboros.Consensus.Util.Versioned
-import qualified Debug.Trace as TRACE
+-- import qualified Debug.Trace as TRACE
 
 {-------------------------------------------------------------------------------
   Ledger DB types
@@ -511,7 +511,7 @@ applyBlock cfg ap db = case ap of
       -- A value of @Weaken@ will not make it to this point, as @applyBlock@ will recurse until it fully unwraps.
       Weaken _ -> error "unreachable"
 
-    ifT b msg what = if (blockSlot b > 4492850) then TRACE.trace msg what else what
+    -- ifT b msg what = if (blockSlot b > 4492850) then TRACE.trace msg what else what
     
     withBlockReadSets
       :: ReadsKeySets m l
@@ -520,9 +520,9 @@ applyBlock cfg ap db = case ap of
       -> m (l TrackingMK)
     withBlockReadSets b f = do
       let ks = getBlockKeySets b :: TableKeySets l
-      ifT b ("blockKeySets: " <> showsLedgerState sMapKind ks "") $ return ()
+      -- ifT b ("blockKeySets: " <> showsLedgerState sMapKind ks "") $ return ()
       let aks@(RewoundTableKeySets s rw) = rewindTableKeySets (ledgerDbChangelog db) ks :: RewoundTableKeySets l
-      ifT b ("rewindTableKeySets: slot " <> show s <> ", vals: " <> showsLedgerState sMapKind rw "") $ return ()      
+      -- ifT b ("rewindTableKeySets: slot " <> show s <> ", vals: " <> showsLedgerState sMapKind rw "") $ return ()
       urs <- readDb aks
       case withHydratedLedgerState urs f b rw of
         Left err ->
@@ -546,7 +546,8 @@ applyBlock cfg ap db = case ap of
       -> LedgerTables l RewoundMK
       -> Either (WithOrigin SlotNo, WithOrigin SlotNo) a
     withHydratedLedgerState urs f b aks =
-      (\rs -> f $ withLedgerTables (ledgerDbCurrent db) (mapLedgerTables (\tbs@(ApplyValuesMK (UtxoValues vals)) -> TRACE.trace (show $ Map.size $ vals) tbs) rs))
+      (\rs -> f $ withLedgerTables (ledgerDbCurrent db) -- (mapLedgerTables (\tbs@(ApplyValuesMK (UtxoValues vals)) -> TRACE.trace (show $ Map.size $ vals) tbs)
+                                                         rs) --)
       <$> forwardTableKeySets (ledgerDbChangelog db) urs
 
 {-------------------------------------------------------------------------------
