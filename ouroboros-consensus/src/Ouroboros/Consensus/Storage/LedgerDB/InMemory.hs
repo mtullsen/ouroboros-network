@@ -120,6 +120,13 @@ import Ouroboros.Consensus.Storage.LedgerDB.DeadCardanoAVVM (deadCardanoAVVM)
 import Unsafe.Coerce (unsafeCoerce)
 import Cardano.Ledger.Crypto (StandardCrypto)
 import qualified Debug.Trace as TRACE
+
+import qualified Cardano.Ledger.Shelley.UTxO as HACK
+import qualified Cardano.Ledger.Shelley as HACKS
+import qualified Cardano.Ledger.TxIn as HACK
+import qualified Cardano.Ledger.Core as CORE
+import qualified Cardano.Ledger.Allegra as HACK
+import qualified Cardano.Ledger.Era as SL
 --import qualified Debug.Trace as TRACE
 
 {-------------------------------------------------------------------------------
@@ -395,7 +402,7 @@ applyBlock cfg ap db = case ap of
         applyBlock cfg ap' db
     _ -> do
       legacyLs' <- mapM (`legacyApplyBlock` ap) legacyLs
-      modernLs' <- allegraDiffs <$> modernApplyBlock ap
+      modernLs' <- kludge <$> modernApplyBlock ap
 
       let _ = legacyLs' :: Maybe (l EmptyMK)
           _ = modernLs' :: l TrackingMK
@@ -462,9 +469,16 @@ applyBlock cfg ap db = case ap of
     _modernLs :: l EmptyMK
     _modernLs = ledgerDbCurrent db
 
-    allegraDiffs :: (l TrackingMK, SlotNo) -> l TrackingMK
-    allegraDiffs (l, 16588800) = mappendTracking (pureLedgerTables $ TRACE.trace "INJECTING BOII" $ ApplyTrackingMK (UtxoValues Map.empty) (unsafeCoerce $ UtxoDiff $ Map.map (flip UtxoEntryDiff UedsDel) $ SL.unUTxO $ unsafeCoerce $ deadCardanoAVVM @StandardCrypto))  l
-    allegraDiffs (l, _) = l
+    -- myCoerce1 :: HACK.TxIn StandardCrypto -> k
+    -- myCoerce1 = unsafeCoerce
+
+    -- myCoerce2 :: CORE.TxOut (HACKS.ShelleyEra StandardCrypto) -> v
+    -- myCoerce2 = unsafeCoerce . f
+    --   where f :: SL.TranslateEra (HACK.AllegraEra StandardCrypto) HACK.TxOut => CORE.TxOut (HACKS.ShelleyEra StandardCrypto) -> CORE.TxOut (HACK.AllegraEra StandardCrypto)
+    --         f = SL.translateEra' @(HACK.AllegraEra StandardCrypto) ()
+    kludge :: (l TrackingMK, SlotNo) -> l TrackingMK
+    kludge (l, 16588800) = mappendTracking (TRACE.trace "THERE WE GOOOO" bewareTheFearedKludge) l
+    kludge (l, _) = l
 
     legacyLs :: Maybe (l EmptyMK)
     legacyLs = ledgerDbCurrentValues db

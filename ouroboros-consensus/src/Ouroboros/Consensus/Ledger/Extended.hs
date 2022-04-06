@@ -217,6 +217,8 @@ instance (LedgerSupportsProtocol blk, TableStuff (LedgerState blk)) => TableStuf
   foldLedgerTables  f = coerce $ foldLedgerTables  @(LedgerState blk) f
   foldLedgerTables2 f = coerce $ foldLedgerTables2 @(LedgerState blk) f
 
+  bewareTheFearedKludge = ExtLedgerStateTables bewareTheFearedKludge
+
 instance ( LedgerSupportsProtocol blk
          , SufficientSerializationForAnyBackingStore (LedgerState blk)
          )

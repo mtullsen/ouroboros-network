@@ -511,6 +511,14 @@ instance CardanoHardForkConstraints c => TableStuff (LedgerState (CardanoBlock c
   foldLedgerTables     f                         (CardanoLedgerTables x) = f x
   foldLedgerTables2    f (CardanoLedgerTables l) (CardanoLedgerTables r) = f l r
 
+  bewareTheFearedKludge = CardanoLedgerTables
+                        $ ApplyTrackingMK (HD.UtxoValues Map.empty)
+                        $ HD.UtxoDiff
+                        $ Map.map (`HD.UtxoEntryDiff` HD.UedsDel)
+                        $ Map.map (ShelleyTxOut . SOP.injectNS (IS IZ) . TxOutWrapper)
+                        $ Map.map (unTxOutWrapper . SL.translateEra' () . TxOutWrapper)
+                        $ SL.unUTxO deadCardanoAVVM
+
 instance CardanoHardForkConstraints c
       => SufficientSerializationForAnyBackingStore (LedgerState (CardanoBlock c)) where
     codecLedgerTables = CardanoLedgerTables (CodecMK toCBOR toCBOR fromCBOR fromCBOR)

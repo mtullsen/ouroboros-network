@@ -456,6 +456,8 @@ class ( ShowLedgerState (LedgerTables l)
     -> LedgerTables l mk2
     -> m
 
+  bewareTheFearedKludge :: LedgerTables l TrackingMK
+
 overLedgerTables ::
      (TableStuff l, IsApplyMapKind mk1, IsApplyMapKind mk2)
   => (LedgerTables l mk1 -> LedgerTables l mk2)

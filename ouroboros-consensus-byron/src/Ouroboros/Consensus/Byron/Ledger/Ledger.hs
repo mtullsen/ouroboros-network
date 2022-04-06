@@ -181,7 +181,6 @@ instance IsLedgerHD (LedgerState ByronBlock) where
             byronLedgerTransition
         }
 
-
 instance IsLedger (LedgerState ByronBlock) where
   type LedgerErr (LedgerState ByronBlock) = CC.ChainValidationError
 
@@ -213,6 +212,8 @@ instance TableStuff (LedgerState ByronBlock) where
   zipLedgerTables2     _f NoByronLedgerTables NoByronLedgerTables NoByronLedgerTables = NoByronLedgerTables
   foldLedgerTables     _f                     NoByronLedgerTables = mempty
   foldLedgerTables2    _f NoByronLedgerTables NoByronLedgerTables = mempty
+
+  bewareTheFearedKludge  = NoByronLedgerTables
 
 instance SufficientSerializationForAnyBackingStore (LedgerState ByronBlock) where
     codecLedgerTables = NoByronLedgerTables
