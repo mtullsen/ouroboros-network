@@ -229,6 +229,7 @@ library
                        Ouroboros.Consensus.Storage.ImmutableDB.Impl.Types
                        Ouroboros.Consensus.Storage.ImmutableDB.Impl.Util
                        Ouroboros.Consensus.Storage.ImmutableDB.Impl.Validation
+                       Ouroboros.Consensus.Storage.LedgerDB.DeadCardanoAVVM
                        Ouroboros.Consensus.Storage.LedgerDB.DiskPolicy
                        Ouroboros.Consensus.Storage.LedgerDB.HD
                        Ouroboros.Consensus.Storage.LedgerDB.HD.BackingStore
@@ -333,6 +334,14 @@ library
                      , ouroboros-network-framework
                      , ouroboros-network
                      , strict-stm        >=0.1   && <0.2
+
+
+                     , cardano-crypto-wrapper
+                     , cardano-ledger-byron
+                     , cardano-ledger-core
+                     , cardano-ledger-shelley-ma
+                     , cardano-ledger-shelley
+                     , compact-map
 
 
   if os(windows)

@@ -24,6 +24,7 @@
 -- TODO stylish haskell insists on deleting this pragma if placed in the group above.
 {-# LANGUAGE DerivingStrategies       #-}
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE TupleSections #-}
 
 
 module Ouroboros.Consensus.Storage.LedgerDB.InMemory (
@@ -114,6 +115,11 @@ import           Ouroboros.Consensus.Storage.LedgerDB.Types (PushGoal (..),
 import           Ouroboros.Consensus.Util
 import           Ouroboros.Consensus.Util.CBOR (decodeWithOrigin)
 import           Ouroboros.Consensus.Util.Versioned
+import qualified Cardano.Chain.UTxO as SL
+import Ouroboros.Consensus.Storage.LedgerDB.DeadCardanoAVVM (deadCardanoAVVM)
+import Unsafe.Coerce (unsafeCoerce)
+import Cardano.Ledger.Crypto (StandardCrypto)
+import qualified Debug.Trace as TRACE
 --import qualified Debug.Trace as TRACE
 
 {-------------------------------------------------------------------------------
@@ -389,7 +395,7 @@ applyBlock cfg ap db = case ap of
         applyBlock cfg ap' db
     _ -> do
       legacyLs' <- mapM (`legacyApplyBlock` ap) legacyLs
-      modernLs' <- modernApplyBlock ap
+      modernLs' <- allegraDiffs <$> modernApplyBlock ap
 
       let _ = legacyLs' :: Maybe (l EmptyMK)
           _ = modernLs' :: l TrackingMK
@@ -456,6 +462,10 @@ applyBlock cfg ap db = case ap of
     _modernLs :: l EmptyMK
     _modernLs = ledgerDbCurrent db
 
+    allegraDiffs :: (l TrackingMK, SlotNo) -> l TrackingMK
+    allegraDiffs (l, 16588800) = mappendTracking (pureLedgerTables $ TRACE.trace "INJECTING BOII" $ ApplyTrackingMK (UtxoValues Map.empty) (unsafeCoerce $ UtxoDiff $ Map.map (flip UtxoEntryDiff UedsDel) $ SL.unUTxO $ unsafeCoerce $ deadCardanoAVVM @StandardCrypto))  l
+    allegraDiffs (l, _) = l
+
     legacyLs :: Maybe (l EmptyMK)
     legacyLs = ledgerDbCurrentValues db
 
@@ -483,30 +493,30 @@ applyBlock cfg ap db = case ap of
       -- A value of @Weaken@ will not make it to this point, as @applyBlock@ will recurse until it fully unwraps.
       Weaken _ -> error "unreachable"
 
-    modernApplyBlock :: Ap m l blk c -> m (l TrackingMK)
+    modernApplyBlock :: Ap m l blk c -> m (l TrackingMK, SlotNo)
     modernApplyBlock = \case
-      ReapplyVal b -> withBlockReadSets b $ \lh ->
+      ReapplyVal b -> (, blockSlot b) <$> (withBlockReadSets b $ \lh ->
           ( either (\e -> error (show (blockRealPoint b) <> " " <> show e)) return
                $ runExcept
-               $ tickThenApplyHD cfg b lh)
+               $ tickThenApplyHD cfg b lh))
 
-      ApplyVal b -> withBlockReadSets b $ \lh ->
+      ApplyVal b -> (, blockSlot b) <$> (withBlockReadSets b $ \lh ->
                ( either (throwLedgerError db (blockRealPoint b)) return
                $ runExcept
-               $ tickThenApplyHD cfg b lh)
+               $ tickThenApplyHD cfg b lh))
 
       ReapplyRef r  -> do
         b <- resolveBlock r -- TODO: ask: would it make sense to recursively call applyBlock using ReapplyVal?
 
-        withBlockReadSets b $ \lh ->
-          return $ tickThenReapplyHD cfg b lh
+        (, blockSlot b) <$> (withBlockReadSets b $ \lh ->
+          return $ tickThenReapplyHD cfg b lh)
 
       ApplyRef r -> do
         b <- resolveBlock r
 
-        withBlockReadSets b $ \lh ->
+        (, blockSlot b) <$> (withBlockReadSets b $ \lh ->
           either (throwLedgerError db (blockRealPoint b)) return $ runExcept $
-             tickThenApplyHD cfg b lh
+             tickThenApplyHD cfg b lh)
 
       -- A value of @Weaken@ will not make it to this point, as @applyBlock@ will recurse until it fully unwraps.
       Weaken _ -> error "unreachable"

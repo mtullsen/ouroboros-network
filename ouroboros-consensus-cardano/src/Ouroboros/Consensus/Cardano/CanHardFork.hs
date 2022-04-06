@@ -125,6 +125,8 @@ import qualified Cardano.Protocol.TPraos.Rules.Tickn as SL
 
 import           Ouroboros.Consensus.Cardano.Block
 
+import Ouroboros.Consensus.Storage.LedgerDB.DeadCardanoAVVM
+
 {-------------------------------------------------------------------------------
   Figure out the transition point for Byron
 
@@ -852,6 +854,8 @@ translateLedgerStateShelleyToAllegraWrapper =
               . SL.translateEra' ()
               . Comp
               . Flip
+              . stowLedgerTables
+              . flip withLedgerTables (ShelleyLedgerTables $ ApplyValuesMK $ HD.UtxoValues $ SL.unUTxO deadCardanoAVVM)
         , translateLedgerTablesWith =
               \ShelleyLedgerTables { shelleyUTxOTable = ApplyValuesMK (HD.UtxoValues vals) } ->
                ShelleyLedgerTables { shelleyUTxOTable = ApplyValuesMK
