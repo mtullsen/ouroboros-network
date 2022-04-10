@@ -1,10 +1,12 @@
 {-# LANGUAGE DeriveFunctor              #-}
 {-# LANGUAGE DeriveGeneric              #-}
+{-# LANGUAGE DeriveTraversable          #-}
 {-# LANGUAGE DerivingStrategies         #-}
 {-# LANGUAGE DerivingVia                #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE DeriveTraversable          #-}
 {-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE NumericUnderscores         #-}
 {-# LANGUAGE StandaloneDeriving         #-}
 
 module Data.Monoid.Synchronisation
@@ -23,7 +25,10 @@ import           Data.Monoid (Alt (..), Ap (..))
 import           GHC.Generics (Generic, Generic1)
 
 import           Control.Applicative (Alternative (..))
-import           Control.Monad (MonadPlus (..))
+import           Control.Monad (MonadPlus (..), forever)
+import           Control.Monad.STM
+import           Control.Concurrent (threadDelay)
+import           Control.Concurrent.Async
 
 
 -- | First-to-finish synchronisation.  Like 'Alt' it is a monoid under '<|>'.
@@ -48,11 +53,22 @@ newtype FirstToFinish m a = FirstToFinish { runFirstToFinish :: m a }
                    , MonadPlus
                    , Traversable
                    )
-  deriving Semigroup     via (Alt m a)
-  deriving Monoid        via (Alt m a)
   deriving Foldable      via (Alt m)
   deriving Contravariant via (Alt m)
 
+
+instance Semigroup (FirstToFinish IO a) where
+    FirstToFinish a <> FirstToFinish b = FirstToFinish $ either id id <$> race a b
+
+instance Monoid (FirstToFinish IO a) where
+    mempty = FirstToFinish $ forever $ threadDelay 3_600_000
+
+instance Semigroup (FirstToFinish STM a) where
+    FirstToFinish a <> FirstToFinish b = FirstToFinish . getAlt
+                                       $ Alt a <|> Alt b
+
+instance Monoid (FirstToFinish STM a) where
+    mempty = FirstToFinish . getAlt $ mempty
 
 -- | Last-to-finish synchronisation.  It is the multiplicative semigroup of
 -- the [near-semiring](https://www.wikiwand.com/en/Near-semiring) for which addition is
