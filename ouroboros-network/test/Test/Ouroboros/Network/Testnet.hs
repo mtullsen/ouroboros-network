@@ -7,7 +7,8 @@ module Test.Ouroboros.Network.Testnet (tests) where
 
 import           Control.Monad.IOSim
 import           Control.Monad.IOSim.Types (ThreadId)
-import           Control.Monad.Class.MonadTime (Time (Time), DiffTime, diffTime)
+import           Control.Monad.Class.MonadTime
+                     (Time (Time), DiffTime, diffTime, addTime)
 import           Control.Tracer (Tracer (Tracer), contramap, nullTracer)
 
 import           Data.Bifoldable (bifoldMap)
@@ -15,6 +16,7 @@ import           Data.Void (Void)
 import           Data.Set (Set)
 import qualified Data.Set as Set
 import qualified Data.Map as Map
+import           Data.Map (Map)
 import           Data.Maybe (fromMaybe, mapMaybe)
 import           Data.Monoid (Sum(..))
 import           Data.Dynamic (Typeable)
@@ -26,6 +28,8 @@ import           Data.Time (secondsToDiffTime)
 import           System.Random (mkStdGen)
 import           GHC.Exception.Type (SomeException)
 
+import qualified Network.DNS.Types as DNS
+
 import           Ouroboros.Network.Testing.Data.AbsBearerInfo
                      (AbsBearerInfo (..), attenuation, delay, toSduSize)
 import           Ouroboros.Network.PeerSelection.Governor
@@ -34,7 +38,7 @@ import           Ouroboros.Network.Testing.Data.Signal
                       (Events, Signal, eventsToList,
                       signalProperty)
 import           Ouroboros.Network.PeerSelection.RootPeersDNS
-                      (TraceLocalRootPeers, TracePublicRootPeers)
+                      (TraceLocalRootPeers (..), TracePublicRootPeers (..), dapDomain)
 import           Ouroboros.Network.PeerSelection.Types (PeerStatus(..))
 import           Ouroboros.Network.Diffusion.P2P
                       (TracersExtra(..), RemoteTransitionTrace)
@@ -44,6 +48,8 @@ import qualified Ouroboros.Network.Testing.Data.Signal as Signal
 import qualified Ouroboros.Network.PeerSelection.Governor as Governor
 import qualified Ouroboros.Network.PeerSelection.LocalRootPeers as LocalRootPeers
 import qualified Ouroboros.Network.PeerSelection.EstablishedPeers as EstablishedPeers
+import           Ouroboros.Network.PeerSelection.RootPeersDNS.DNSActions
+                      (DNSorIOError(DNSError))
 import qualified Ouroboros.Network.Diffusion.P2P as Diff.P2P
 import           Ouroboros.Network.Testing.Utils
                       (WithTime(..), WithName(..), tracerWithTime,
@@ -83,6 +89,8 @@ tests =
                    prop_diffusionScript_commandScript_valid
     , testProperty "diffusion no livelock"
                    prop_diffusion_nolivelock
+    , testProperty "diffusion dns can recover from fails"
+                   prop_diffusion_dns_can_recover
     , testProperty "diffusion target established local"
                    prop_diffusion_target_established_local
     , testProperty "diffusion target active below"
@@ -264,6 +272,115 @@ prop_diffusion_nolivelock defaultBearerInfo diffScript@(DiffusionScript l) =
         countdown 0 (_ : _) = False
         countdown _ []      = True
         countdown n (_ : es)  = countdown (n-1) es
+
+-- | Test that verifies that that we can recover from DNS lookup failures.
+--
+-- This checks that if a node is configured with a local root peer through DNS,
+-- and then the peer gets disconnected, the DNS lookup fails (so you can’t
+-- reconnect). After a bit DNS lookup succeeds and you manage to connect again.
+--
+prop_diffusion_dns_can_recover :: AbsBearerInfo
+                               -> DiffusionScript
+                               -> Property
+prop_diffusion_dns_can_recover defaultBearerInfo diffScript =
+    let sim :: forall s . IOSim s Void
+        sim = diffusionSimulation (toBearerInfo defaultBearerInfo)
+                                  diffScript
+                                  tracersExtraWithTimeName
+                                  tracerDiffusionSimWithTimeName
+
+        events :: [Events DiffusionTestTrace]
+        events = fmap ( Signal.eventsFromList
+                      . fmap (\(WithName _ (WithTime t b)) -> (t, b))
+                      )
+               . Trace.toList
+               . splitWithNameTrace
+               . Trace.fromList ()
+               . fmap snd
+               . Signal.eventsToList
+               . Signal.eventsFromListUpToTime (Time (10 * 60 * 60))
+               . Trace.toList
+               . fmap (\(WithTime t (WithName name b)) -> (t, WithName name (WithTime t b)))
+               . withTimeNameTraceEvents
+                  @DiffusionTestTrace
+                  @NtNAddr
+               . Trace.fromList (MainReturn (Time 0) () [])
+               . fmap (\(t, tid, tl, te) -> SimEvent t tid tl te)
+               . take 1000000
+               . traceEvents
+               $ runSimTrace sim
+
+     in conjoin
+      $ (\ev ->
+        let evsList = eventsToList ev
+            lastTime = fst
+                     . last
+                     $ evsList
+         in classifySimulatedTime lastTime
+          $ classifyNumberOfEvents (length evsList)
+          $ verify_dns_can_recover ev
+        )
+      <$> events
+
+  where
+
+    -- | Policy for TTL for positive results
+    -- | Policy for TTL for negative results
+    -- Cache negative response for 3hrs
+    -- Otherwise, use exponential backoff, up to a limit
+    ttlForDnsError :: DNS.DNSError -> DiffTime -> DiffTime
+    ttlForDnsError DNS.NameError _ = 10800
+    ttlForDnsError _           ttl = clipTTLAbove (ttl * 2 + 5)
+
+    -- | Limit insane TTL choices.
+    clipTTLAbove :: DiffTime -> DiffTime
+    clipTTLAbove = min 86400  -- and 24hrs
+
+    verify :: Map DNS.Domain Time
+           -> Int
+           -> Time
+           -> [(Time, DiffusionTestTrace)]
+           -> Property
+    verify toRecover recovered time [] =
+      counterexample (show toRecover ++ " none of these DNS names recovered\n"
+                     ++ "Final time: " ++ show time ++ "\n"
+                     ++ "Number of recovered: " ++ show recovered )
+                     (all (>= time) toRecover || recovered > 0)
+    verify toRecover recovered time ((t, ev):evs) =
+      case ev of
+        DiffusionLocalRootPeerTrace
+          (TraceLocalRootFailure dap (DNSError err)) ->
+            let ttl = ttlForDnsError err 0
+                dns = dapDomain dap
+             in verify (Map.singleton dns (addTime ttl t) <> toRecover)
+                        recovered t evs
+        DiffusionPublicRootPeerTrace (TracePublicRootFailure dns err) ->
+            let ttl = ttlForDnsError err 0
+             in verify (Map.singleton dns (addTime ttl t) <> toRecover)
+                        recovered t evs
+        DiffusionLocalRootPeerTrace (TraceLocalRootResult dap _) ->
+          let dns = dapDomain dap
+           in case Map.lookup dns toRecover of
+                Nothing -> verify toRecover recovered t evs
+                Just _  -> verify (Map.delete dns toRecover)
+                                  (recovered + 1)
+                                  t
+                                  evs
+        DiffusionPublicRootPeerTrace (TracePublicRootResult dns _) ->
+           case Map.lookup dns toRecover of
+             Nothing -> verify toRecover recovered t evs
+             Just _  -> verify (Map.delete dns toRecover)
+                                (recovered + 1)
+                                t
+                                evs
+        DiffusionDiffusionSimulationTrace TrReconfigurionNode ->
+          verify Map.empty recovered t evs
+        _ -> verify toRecover recovered time evs
+
+    verify_dns_can_recover :: Events DiffusionTestTrace -> Property
+    verify_dns_can_recover events =
+        counterexample (show events)
+      $ verify Map.empty 0 (Time 0) (Signal.eventsToList events)
 
 -- | A variant of
 -- 'Test.Ouroboros.Network.PeerSelection.prop_governor_target_established_local'
