@@ -284,7 +284,7 @@ We classify (potential or actual) upstream peers in three nested categories:
 
 We define the terms /known/, /established/ and /active/ to be nested sets.
 We define the terms /cold/, /warm/ and /hot/ to be disjoint sets. Both
-collections of terms are useful. For example there is information wish to
+collections of terms are useful. For example there is information we wish to
 track for all known peers, irrespective of whether they are cold, warm or hot.
 
 So we have six transitions to consider:

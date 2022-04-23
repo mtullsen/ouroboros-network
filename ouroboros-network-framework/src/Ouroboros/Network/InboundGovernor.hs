@@ -93,7 +93,7 @@ inboundGovernor :: forall (muxMode :: MuxMode) socket peerAddr versionNumber m a
                    , MonadTime     m
                    , MonadTimer    m
                    , MonadMask     m
-                   , Ord peerAddr
+                   , Ord peerAddr              -- MT: ~odd
                    , HasResponder muxMode ~ True
                    )
                 => Tracer m (RemoteTransitionTrace peerAddr)
@@ -107,7 +107,7 @@ inboundGovernor :: forall (muxMode :: MuxMode) socket peerAddr versionNumber m a
 inboundGovernor trTracer tracer serverControlChannel inboundIdleTimeout
                 connectionManager observableStateVar = do
     -- State needs to be a TVar, otherwise, when catching the exception inside
-    -- the loop we do not have access to the most recentversion of the state
+    -- the loop we do not have access to the most recent version of the state
     -- and might be truncating transitions.
     st <- atomically $ newTVar emptyState
     inboundGovernorLoop st
@@ -136,7 +136,7 @@ inboundGovernor trTracer tracer serverControlChannel inboundIdleTimeout
           }
 
     -- The inbound protocol governor recursive loop.  The 'igsConnections' is
-    -- updated as we recurs.
+    -- updated as we recurse.
     --
     inboundGovernorLoop
       :: StrictTVar m (InboundGovernorState muxMode peerAddr m a b)

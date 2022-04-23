@@ -273,7 +273,7 @@ socketAddressType addr                    =
 
 -- | P2P Applications Extras
 --
--- TODO: we need initiator only mode for Deadalus, there's no reason why it
+-- TODO: we need initiator only mode for Daedalus, there's no reason why it
 -- should run a node-to-node server side.
 --
 data ApplicationsExtra ntnAddr m =
@@ -663,6 +663,8 @@ runM Interfaces
                          (Just _, Just _)  -> return LookupReqAAndAAAA
                          _                 ->
                              throwIO (NoSocket :: Failure RemoteAddress)
+                                      -- MT: ^ huh?
+                                      -- MT: NoSocket never pat-matched on
 
     -- control channel for the server; only required in
     -- @'InitiatorResponderMode' :: 'MuxMode'@
@@ -883,35 +885,33 @@ runM Interfaces
                            :: NodeToNodePeerSelectionActions
                                 InitiatorMode ntnAddr m Void) ->
 
-                      Async.withAsync
-                      (Governor.peerSelectionGovernor
-                      dtTracePeerSelectionTracer
-                      dtDebugPeerSelectionInitiatorTracer
-                      dtTracePeerSelectionCounters
-                      fuzzRng
-                      peerSelectionActions
-                      (Diffusion.Policies.simplePeerSelectionPolicy
-                      policyRngVar (readTVar churnModeVar) daPeerMetrics))
-                      $ \governorThread ->
                         Async.withAsync
-                        (Governor.peerChurnGovernor
-                        dtTracePeerSelectionTracer
-                        daPeerMetrics
-                        churnModeVar
-                        churnRng
-                        daBlockFetchMode
-                        daPeerSelectionTargets
-                        peerSelectionTargetsVar)
-                        $ \churnGovernorThread ->
-
-                              -- wait for any thread to fail
-                              snd <$> Async.waitAny
-                              (maybeToList mbLocalPeerSelectionActionsThread
-                              ++ [ governorThread
-                                 , ledgerPeerThread
-                                 , churnGovernorThread
-                                 ])
-
+                        (Governor.peerSelectionGovernor
+                          dtTracePeerSelectionTracer
+                          dtDebugPeerSelectionInitiatorTracer
+                          dtTracePeerSelectionCounters
+                          fuzzRng
+                          peerSelectionActions
+                          (Diffusion.Policies.simplePeerSelectionPolicy
+                            policyRngVar (readTVar churnModeVar) daPeerMetrics))
+                        $ \governorThread ->
+                          Async.withAsync
+                          (Governor.peerChurnGovernor
+                            dtTracePeerSelectionTracer
+                            daPeerMetrics
+                            churnModeVar
+                            churnRng
+                            daBlockFetchMode
+                            daPeerSelectionTargets
+                            peerSelectionTargetsVar)
+                          $ \churnGovernorThread ->
+                                -- wait for any thread to fail
+                                snd <$> Async.waitAny
+                                (maybeToList mbLocalPeerSelectionActionsThread
+                                ++ [ governorThread
+                                   , ledgerPeerThread
+                                   , churnGovernorThread
+                                   ])
 
               -- InitiatorResponderMode
               --
@@ -1027,7 +1027,7 @@ runM Interfaces
                           -- Run server
                           --
                           traceWith tracer (RunServer addresses)
-                          Async.withAsync
+                          Async.withAsync  -- MT: TODO
                             (Server.run
                               ServerArguments {
                                   serverSockets               = sockets,
@@ -1054,6 +1054,7 @@ runM Interfaces
                                     $ \churnGovernorThread ->
 
                                       -- wait for any thread to fail
+                                      -- MT: TODO
                                       snd <$> Async.waitAny
                                         (maybeToList mbLocalPeerRootProviderThread
                                         ++ [ serverThread
@@ -1076,6 +1077,7 @@ runM Interfaces
     (fuzzRng,        rng4) = split rng3
     (ntnInbgovRng,   ntcInbgovRng) = split rng4
 
+    -- MT: TODO
     -- Only the 'IOManagerError's are fatal, all the other exceptions in the
     -- networking code will only shutdown the bearer (see 'ShutdownPeer' why
     -- this is so).
@@ -1193,14 +1195,14 @@ run tracers tracersExtra args argsExtra apps appsExtra = do
                  diDnsActions = ioDNSActions
                }
                tracers tracersExtra args argsExtra apps appsExtra
-
+                 -- MT: could eta reduce last 4 args
 
 --
 -- Data flow
 --
 
 -- | For Node-To-Node protocol, any connection which negotiated at least
--- 'NodeToNodeV_9' version and did not declared 'InitiatorOnlyDiffusionMode'
+-- 'NodeToNodeV_9' version and did not declare 'InitiatorOnlyDiffusionMode'
 -- will run in 'Duplex' mode.   All connections from lower versions or one that
 -- declared themselves as 'InitiatorOnly' will run in 'UnidirectionalMode'
 --

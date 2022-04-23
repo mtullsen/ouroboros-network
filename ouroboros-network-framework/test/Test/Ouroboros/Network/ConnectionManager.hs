@@ -33,7 +33,8 @@ import           Control.Monad.Class.MonadThrow
 import           Control.Monad.Class.MonadTime
 import           Control.Monad.Class.MonadTimer
 import           Control.Monad.IOSim
-import           Control.Tracer (Tracer (..), contramap, nullTracer)
+import           Control.Tracer (Tracer (..), contramap, nullTracer,debugTracer)
+                  -- MT: debugTracer
 
 import           GHC.Generics
 import           GHC.IO.Exception
@@ -76,6 +77,7 @@ tests =
     -- TODO: replace these tests with 'Test.Ouroboros.Network.Server2' simulation.
     testProperty "overwritten"                    unit_overwritten
   , testProperty "timeoutExpired"                 unit_timeoutExpired
+  , testProperty "new-bogus"                      True  -- MT
   ]
 
 
@@ -378,7 +380,7 @@ instance Exception TestError
 -- which the kernel would forbid, e.g. the two connections with the same
 -- four-tuples.
 --
--- Note: we don't track all the connection in the system, but rather relay on
+-- Note: we don't track all the connection in the system, but rather rely on
 -- the event schedule.  If the execution environment (test runtime) is in sync
 -- with the snocket, it will pass the right 'ScheduleEntry' to the test
 -- runtime, both for outbound ('connect' call) and inbound ('accept' call).
@@ -751,7 +753,7 @@ prop_valid_transitions (SkewedBool bindToLocalAddress) scheduleMap =
           ConnectionManagerArguments {
               cmTracer,
               cmTrTracer,
-              cmMuxTracer = nullTracer,
+              cmMuxTracer = nullTracer, --MT: TODO: figure how to change.
               cmIPv4Address = myAddress,
               cmIPv6Address = Nothing,
               cmAddressType = \_ -> Just IPv4Address,

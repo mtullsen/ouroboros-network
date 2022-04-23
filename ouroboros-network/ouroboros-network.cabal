@@ -203,6 +203,7 @@ library
                        -Wpartial-fields
                        -Widentities
                        -Wredundant-constraints
+                       -fwrite-ide-info
   if flag(asserts)
     ghc-options:       -fno-ignore-asserts
 
