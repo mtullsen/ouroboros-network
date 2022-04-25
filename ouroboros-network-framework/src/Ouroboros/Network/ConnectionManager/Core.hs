@@ -75,7 +75,8 @@ data ConnectionManagerArguments handlerTrace socket peerAddr handle handleError 
 
         -- | Trace state transitions.
         --
-        cmTrTracer            :: Tracer m (TransitionTrace peerAddr (ConnectionState peerAddr handle handleError version m)),
+        cmTrTracer            :: Tracer m (TransitionTrace peerAddr
+                                            (ConnectionState peerAddr handle handleError version m)),
 
         -- | Mux trace.
         --

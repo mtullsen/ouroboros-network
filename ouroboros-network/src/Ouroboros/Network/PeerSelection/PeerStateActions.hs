@@ -158,7 +158,7 @@ import           Ouroboros.Network.ConnectionManager.Types
 -- us to terminate, quiesce or re-enable mini-protocols.
 --
 --
--- Bellow is a schematic illustration of function calls / threads and shared
+-- Below is a schematic illustration of function calls / threads and shared
 -- state variables.  Reads done just make assertions are not included.  The
 -- diagram does not include 'establishPeerConnection'.
 --
@@ -332,7 +332,7 @@ instance Semigroup FirstToFinishResult where
     res@MiniProtocolSuccess{} <> MiniProtocolSuccess{} = res
 
 
--- | Await for first result from any of any of the protocols which belongs to
+-- | Await first result from any of any of the protocols which belongs to
 -- the indicated bundle.
 --
 awaitFirstResult :: MonadSTM m
@@ -426,7 +426,8 @@ data PeerConnectionHandle (muxMode :: MuxMode) peerAddr bytes m a b = PeerConnec
     pchMux          :: Mux.Mux muxMode m,
     pchAppHandles   :: Bundle (ApplicationHandle muxMode bytes m a b)
   }
-
+  -- MT: Mux, Bundle - complic. type level stuff
+  
 instance Show peerAddr
       => Show (PeerConnectionHandle muxMode peerAddr bytes m a b) where
     show PeerConnectionHandle { pchConnectionId } =
@@ -575,8 +576,8 @@ withPeerStateActions PeerStateActionsArguments {
       :: PeerConnectionHandle muxMode peerAddr ByteString m a b
       -> m ()
     peerMonitoringLoop pch@PeerConnectionHandle { pchConnectionId, pchPeerState, pchAppHandles } = do
-        -- A first to finish synchronisation on all the bundles; As a result
-        -- this is a first to finish synchronisation between all the
+        -- A first-to-finish synchronisation on all the bundles; As a result
+        -- this is a first-to-finish synchronisation between all the
         -- mini-protocols runs toward the given peer.
         r <-
           atomically $
@@ -601,6 +602,9 @@ withPeerStateActions PeerStateActionsArguments {
           -- thread terminated abruptly and the connection state will be
           -- updated by the finally handler of a connection handler.
           --
+
+          -- MT: type-level reason for WithSomeProtocolTemperature on all patterns?
+          
           WithSomeProtocolTemperature (WithHot MiniProtocolError{}) -> do
             traceWith spsTracer (PeerStatusChanged (HotToCold pchConnectionId))
             atomically (writeTVar pchPeerState (PeerStatus PeerCold))
@@ -903,8 +907,9 @@ withPeerStateActions PeerStateActionsArguments {
                     <*> awaitAllResults TokWarm pchAppHandles
                     <*> awaitAllResults TokEstablished pchAppHandles)
       -- 'unregisterOutboundConnection' could only fail to demote the peer if
-      -- connection manager would simultanously promoted it, but this is not
+      -- connection manager would simultaneously promote it, but this is not
       -- posible.
+        -- MT: huh?, why this comment here?
       case res of
         Nothing -> do
           -- timeout fired
@@ -918,7 +923,7 @@ withPeerStateActions PeerStateActionsArguments {
           -- some mini-protocol errored
           --
           -- we don't need to notify the connection manager, we can instead
-          -- relay on mux property: if any of the mini-protocols errors, mux
+          -- rely on mux property: if any of the mini-protocols errors, mux
           -- throws an exception as well.
           atomically (writeTVar pchPeerState (PeerStatus PeerCold))
           traceWith spsTracer (PeerStatusChangeFailure

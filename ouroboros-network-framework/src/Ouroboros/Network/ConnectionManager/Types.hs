@@ -812,6 +812,7 @@ data AssertionLocation peerAddr
   | PromotedToWarmRemote         !(Maybe (ConnectionId peerAddr)) !AbstractState
   | DemotedToColdRemote          !(Maybe (ConnectionId peerAddr)) !AbstractState
   deriving Show
+  -- MT: odd datatype
 
 -- | 'ConnectionManagerTrace' contains a hole for a trace of single connection
 -- which is filled with 'ConnectionHandlerTrace'.

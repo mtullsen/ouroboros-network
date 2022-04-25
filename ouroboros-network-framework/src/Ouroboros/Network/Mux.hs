@@ -133,7 +133,7 @@ newtype OuroborosApplication (mode :: MuxMode) addr bytes m a b =
 
 
 -- |  There are three kinds of applications: warm, hot and established (ones
--- that run in for both warm and hot peers).
+-- that run in both warm and hot peers).
 --
 data ProtocolTemperature = Established | Warm | Hot
   deriving (Eq, Ord, Show)
@@ -180,7 +180,8 @@ instance Semigroup a => Semigroup (WithProtocolTemperature pt a) where
     WithHot a <> WithHot b                 = WithHot (a <> b)
     WithWarm a <> WithWarm b               = WithWarm (a <> b)
     WithEstablished a <> WithEstablished b = WithEstablished (a <> b)
-
+    -- MT: ^ huh? gadt stuff. 
+    
 instance Monoid a => Monoid (WithProtocolTemperature Hot a) where
     mempty = WithHot mempty
 
@@ -205,7 +206,6 @@ deriving instance Functor WithSomeProtocolTemperature
 
 withoutSomeProtocolTemperature :: WithSomeProtocolTemperature a -> a
 withoutSomeProtocolTemperature (WithSomeProtocolTemperature a) = withoutProtocolTemperature a
-
 
 -- | A bundle of 'HotApp', 'WarmApp' and 'EstablishedApp'.
 --

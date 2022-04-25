@@ -754,27 +754,27 @@ runM Interfaces
                                                   ntcVersionData m)
                     -> do
 
-                  --
-                  -- run local server
-                  --
+                    --
+                    -- run local server
+                    --
 
-                  traceWith tracer . RunLocalServer
-                    =<< Snocket.getLocalAddr diNtcSnocket localSocket
+                    traceWith tracer . RunLocalServer
+                      =<< Snocket.getLocalAddr diNtcSnocket localSocket
 
-                  Async.withAsync
-                    (Server.run
-                      ServerArguments {
-                          serverSockets               = localSocket :| [],
-                          serverSnocket               = diNtcSnocket,
-                          serverTracer                = dtLocalServerTracer,
-                          serverTrTracer              = nullTracer, -- TODO: issue #3320
-                          serverInboundGovernorTracer = dtLocalInboundGovernorTracer,
-                          serverInboundIdleTimeout    = local_PROTOCOL_IDLE_TIMEOUT,
-                          serverConnectionLimits      = localConnectionLimits,
-                          serverConnectionManager     = localConnectionManager,
-                          serverControlChannel        = localControlChannel,
-                          serverObservableStateVar    = localServerStateVar
-                        }) Async.wait
+                    Async.withAsync
+                      (Server.run
+                        ServerArguments {
+                            serverSockets               = localSocket :| [],
+                            serverSnocket               = diNtcSnocket,
+                            serverTracer                = dtLocalServerTracer,
+                            serverTrTracer              = nullTracer, -- TODO: issue #3320
+                            serverInboundGovernorTracer = dtLocalInboundGovernorTracer,
+                            serverInboundIdleTimeout    = local_PROTOCOL_IDLE_TIMEOUT,
+                            serverConnectionLimits      = localConnectionLimits,
+                            serverConnectionManager     = localConnectionManager,
+                            serverControlChannel        = localControlChannel,
+                            serverObservableStateVar    = localServerStateVar
+                          }) Async.wait
 
         --
         -- remote connection manager
@@ -1015,6 +1015,7 @@ runM Interfaces
                           peerSelectionActions
                           (Diffusion.Policies.simplePeerSelectionPolicy
                             policyRngVar (readTVar churnModeVar) daPeerMetrics))
+                        -- FIXME: identical to prev. call to.
                         $ \governorThread ->
                         withSockets tracer diNtnSnocket
                                     ( catMaybes
@@ -1027,7 +1028,7 @@ runM Interfaces
                           -- Run server
                           --
                           traceWith tracer (RunServer addresses)
-                          Async.withAsync  -- MT: TODO
+                          Async.withAsync
                             (Server.run
                               ServerArguments {
                                   serverSockets               = sockets,
