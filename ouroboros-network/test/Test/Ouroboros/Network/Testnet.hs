@@ -50,6 +50,8 @@ import qualified Ouroboros.Network.PeerSelection.LocalRootPeers as LocalRootPeer
 import qualified Ouroboros.Network.PeerSelection.EstablishedPeers as EstablishedPeers
 import           Ouroboros.Network.PeerSelection.RootPeersDNS.DNSActions
                       (DNSorIOError(DNSError))
+import           Ouroboros.Network.PeerSelection.PeerStateActions
+                      (PeerSelectionActionsTrace(..))
 import           Ouroboros.Network.Server2 (ServerTrace(..))
 import           Ouroboros.Network.InboundGovernor hiding (TrUnexpectedlyFalseAssertion)
 import qualified Ouroboros.Network.InboundGovernor as IG
@@ -119,6 +121,8 @@ tests =
   , testGroup "coverage"
     [ testProperty "diffusion server trace coverage"
                    prop_server_trace_coverage
+    , testProperty "diffusion peer selection actions trace coverage"
+                   prop_peer_selection_action_trace_coverage
     , testProperty "diffusion peer selection trace coverage"
                    prop_peer_selection_trace_coverage
     , testProperty "diffusion connection manager trace coverage"
@@ -144,6 +148,7 @@ data DiffusionTestTrace =
       DiffusionLocalRootPeerTrace (TraceLocalRootPeers NtNAddr SomeException)
     | DiffusionPublicRootPeerTrace TracePublicRootPeers
     | DiffusionPeerSelectionTrace (TracePeerSelection NtNAddr)
+    | DiffusionPeerSelectionActionsTrace (PeerSelectionActionsTrace NtNAddr)
     | DiffusionDebugPeerSelectionTrace (DebugPeerSelection NtNAddr ())
     | DiffusionConnectionManagerTrace
         (ConnectionManagerTrace NtNAddr
@@ -195,7 +200,11 @@ tracersExtraWithTimeName ntnAddr =
         . tracerWithTime
         $ dynamicTracer
     , dtTracePeerSelectionCounters        = nullTracer
-    , dtPeerSelectionActionsTracer        = nullTracer
+    , dtPeerSelectionActionsTracer        = contramap
+                                             DiffusionPeerSelectionActionsTrace
+                                          . tracerWithName ntnAddr
+                                          . tracerWithTime
+                                          $ dynamicTracer
     , dtConnectionManagerTracer           = contramap
                                              DiffusionConnectionManagerTrace
                                           . tracerWithName ntnAddr
@@ -496,6 +505,48 @@ prop_server_trace_coverage defaultBearerInfo diffScript =
       eventsSeenNames = map serverTraceMap events
 
    in tabulate "server trace" eventsSeenNames
+      True
+
+-- | This test coverage of PeerSelectionActionsTrace constructors.
+--
+prop_peer_selection_action_trace_coverage :: AbsBearerInfo
+                                          -> DiffusionScript
+                                          -> Property
+prop_peer_selection_action_trace_coverage defaultBearerInfo diffScript =
+  let sim :: forall s . IOSim s Void
+      sim = diffusionSimulation (toBearerInfo defaultBearerInfo)
+                                diffScript
+                                tracersExtraWithTimeName
+                                tracerDiffusionSimWithTimeName
+
+      events :: [PeerSelectionActionsTrace NtNAddr]
+      events = mapMaybe (\case DiffusionPeerSelectionActionsTrace st -> Just st
+                               _                                     -> Nothing
+                        )
+             . Trace.toList
+             . fmap (\(WithTime _ (WithName _ b)) -> b)
+             . withTimeNameTraceEvents
+                @DiffusionTestTrace
+                @NtNAddr
+             . Trace.fromList (MainReturn (Time 0) () [])
+             . fmap (\(t, tid, tl, te) -> SimEvent t tid tl te)
+             . take 500000
+             . traceEvents
+             $ runSimTrace sim
+
+      peerSelectionActionsTraceMap :: PeerSelectionActionsTrace NtNAddr -> String
+      peerSelectionActionsTraceMap (PeerStatusChanged _)             =
+        "PeerStatusChanged"
+      peerSelectionActionsTraceMap (PeerStatusChangeFailure _ ft) =
+        "PeerStatusChangeFailure " ++ show ft
+      peerSelectionActionsTraceMap (PeerMonitoringError _ se)        =
+        "PeerMonitoringError " ++ show se
+      peerSelectionActionsTraceMap (PeerMonitoringResult _ wspt)     =
+        "PeerMonitoringResult " ++ show wspt
+
+      eventsSeenNames = map peerSelectionActionsTraceMap events
+
+   in tabulate "peer selection actions trace" eventsSeenNames
       True
 
 -- | This test coverage of TracePeerSelection constructors.
