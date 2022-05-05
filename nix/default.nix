@@ -40,6 +40,15 @@ let
         })
       # And, of course, our haskell-nix-ified cabal project:
       (import ./pkgs.nix)
+      # for LMDB cross compilation
+      (self: super:
+        super.lib.optionalAttrs super.stdenv.hostPlatform.isWindows {
+          lmdb = super.lmdb.overrideAttrs (oldAttrs: {
+            makeFlags = oldAttrs.makeFlags ++ [ "SOEXT=.dll" "BINEXT=.exe" ];
+            buildInputs = [ super.windows.pthreads ];
+            patches = [ ./lmdb-mingw.patch ];
+          });
+        })
     ] ++ [
       # This overlay adds a field localConfig to the pkgs that will be used
       # afterwards to retrieve the locally defined values for building the

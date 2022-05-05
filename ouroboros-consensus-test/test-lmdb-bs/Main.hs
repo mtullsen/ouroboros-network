@@ -8,6 +8,10 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE UndecidableInstances #-}
+
+-- TODO remove!
+{-# OPTIONS_GHC -Wwarn #-}
+
 module Main (main) where
 
 import qualified System.Directory as Dir

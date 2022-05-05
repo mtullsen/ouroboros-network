@@ -106,6 +106,8 @@ let
             "ln -s ${libsodium-vrf}/bin/libsodium-23.dll $out/bin/libsodium-23.dll";
           packages.ouroboros-consensus-test.components.tests.test-storage.postInstall =
             "ln -s ${libsodium-vrf}/bin/libsodium-23.dll $out/bin/libsodium-23.dll";
+          packages.ouroboros-consensus-test.components.tests.test-lmdb-bs.postInstall =
+            "ln -s ${libsodium-vrf}/bin/libsodium-23.dll $out/bin/libsodium-23.dll";
         })
       # Options for when not compiling to windows:
       ({ pkgs, ... }:
