@@ -376,6 +376,9 @@ olderThanK hdr isEBB immBlockNo
   where
     bNo = blockNo hdr
 
+data ChainSwitchType = AddingBlock | SwitchingToAFork
+  deriving (Show, Eq)
+
 -- | Return the new tip.
 chainSelectionForFutureBlocks
   :: ( IOLike m
@@ -601,7 +604,7 @@ chainSelectionForBlock cdb@CDB{..} blockCache hdr punish = do
                 switchTo
                   validatedChainDiff
                   (varTentativeHeader chainSelEnv)
-                  AddedToCurrentChain
+                  AddingBlock
       where
         chainSelEnv = mkChainSelEnv curChainAndLedger
         curChain    = VF.validatedFragment curChainAndLedger
@@ -662,7 +665,7 @@ chainSelectionForBlock cdb@CDB{..} blockCache hdr punish = do
                 switchTo
                   validatedChainDiff
                   (varTentativeHeader chainSelEnv)
-                  SwitchedToAFork
+                  SwitchingToAFork
       where
         chainSelEnv = mkChainSelEnv curChainAndLedger
         curChain    = VF.validatedFragment curChainAndLedger
@@ -714,16 +717,10 @@ chainSelectionForBlock cdb@CDB{..} blockCache hdr punish = do
          -- ^ Chain and ledger to switch to
       -> StrictTVar m (StrictMaybe (Header blk))
          -- ^ Tentative header
-      -> (    [LedgerEvent blk]
-           -> NewTipInfo blk
-           -> AnchoredFragment (Header blk)
-           -> AnchoredFragment (Header blk)
-           -> TraceAddBlockEvent blk
-         )
-         -- ^ Given the 'NewTipInfo', the previous chain, and the new chain,
-         -- return the event to trace when we switched to the new chain.
+      -> ChainSwitchType
+         -- ^ Whether we are extending the current chain or switching to a fork.
       -> m (Point blk)
-    switchTo vChainDiff varTentativeHeader mkTraceEvent = do
+    switchTo vChainDiff varTentativeHeader chainSwitchType = do
         (curChain, newChain, events, prevTentativeHeader) <- atomically $ do
           curChain  <- readTVar         cdbChain -- Not Query.getCurrentChain!
           curLedger <- LgrDB.getCurrent cdbLgrDB
@@ -745,17 +742,21 @@ chainSelectionForBlock cdb@CDB{..} blockCache hdr punish = do
               -- Clear the tentative header
               prevTentativeHeader <- swapTVar varTentativeHeader SNothing
 
-              -- Update the followers
-              --
-              -- 'Follower.switchFork' needs to know the intersection point
-              -- (@ipoint@) between the old and the current chain.
-              let ipoint = castPoint $ Diff.getAnchorPoint chainDiff
-              followerHandles <- Map.elems <$> readTVar cdbFollowers
-              forM_ followerHandles $ \followerHandle ->
-                fhSwitchFork followerHandle ipoint newChain
+              when (chainSwitchType == SwitchingToAFork) $ do
+                -- Update the followers
+                --
+                -- 'Follower.switchFork' needs to know the intersection point
+                -- (@ipoint@) between the old and the current chain.
+                let ipoint = castPoint $ Diff.getAnchorPoint chainDiff
+                followerHandles <- Map.elems <$> readTVar cdbFollowers
+                forM_ followerHandles $ \followerHandle ->
+                  fhSwitchFork followerHandle ipoint newChain
 
               return (curChain, newChain, events, prevTentativeHeader)
 
+        let mkTraceEvent = case chainSwitchType of
+              AddingBlock      -> AddedToCurrentChain
+              SwitchingToAFork -> SwitchedToAFork
         trace $ mkTraceEvent events (mkNewTipInfo newLedger) curChain newChain
         whenJust (strictMaybeToMaybe prevTentativeHeader) $
           trace . PipeliningEvent . OutdatedTentativeHeader
