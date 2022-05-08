@@ -138,6 +138,9 @@ newtype OuroborosApplication (mode :: MuxMode) addr bytes m a b =
 data ProtocolTemperature = Established | Warm | Hot
   deriving (Eq, Ord, Show)
 
+-- MT: Would have been easier to learn/grok if
+-- MT:   data ProtocolRunsWhenTemperatureSet = WarmAndHot | Warm | Hot ...
+
 
 -- | Singletons for 'AppKind'
 --
@@ -146,6 +149,7 @@ data TokProtocolTemperature (pt :: ProtocolTemperature) where
     TokWarm        :: TokProtocolTemperature Warm
     TokEstablished :: TokProtocolTemperature Established
 
+-- MT: 'Tok'??
 
 data SomeTokProtocolTemperature where
     SomeTokProtocolTemperature :: TokProtocolTemperature pt
@@ -153,7 +157,7 @@ data SomeTokProtocolTemperature where
 
 
 -- | We keep hot, warm and established application (or their context) distinct.
--- It's only needed for a handly 'projectBundle' map.
+-- It's only needed for a handy 'projectBundle' map.
 --
 data WithProtocolTemperature (pt :: ProtocolTemperature) a where
     WithHot         :: !a -> WithProtocolTemperature Hot  a
@@ -176,11 +180,12 @@ instance Applicative (WithProtocolTemperature Established) where
     pure = WithEstablished
     (<*>) (WithEstablished f) = fmap f
 
-instance Semigroup a => Semigroup (WithProtocolTemperature pt a) where
+instance Semigroup a => Semigroup (WithProtocolTemperature Hot a) where
     WithHot a <> WithHot b                 = WithHot (a <> b)
+instance Semigroup a => Semigroup (WithProtocolTemperature Warm a) where
     WithWarm a <> WithWarm b               = WithWarm (a <> b)
+instance Semigroup a => Semigroup (WithProtocolTemperature Established a) where
     WithEstablished a <> WithEstablished b = WithEstablished (a <> b)
-    -- MT: ^ huh? gadt stuff. 
     
 instance Monoid a => Monoid (WithProtocolTemperature Hot a) where
     mempty = WithHot mempty
@@ -209,6 +214,10 @@ withoutSomeProtocolTemperature (WithSomeProtocolTemperature a) = withoutProtocol
 
 -- | A bundle of 'HotApp', 'WarmApp' and 'EstablishedApp'.
 --
+
+-- MT: a more descriptive name?
+-- MT: E.g., ProtocolTemperatureMap? ProtocolsByTemperature? WithEachProtocolTemperature?
+
 data Bundle a =
       Bundle {
           -- | hot mini-protocols

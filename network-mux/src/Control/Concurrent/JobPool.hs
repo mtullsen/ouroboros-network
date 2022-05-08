@@ -25,6 +25,7 @@ import           Control.Monad.Class.MonadFork (MonadThread (..))
 import           Control.Monad.Class.MonadSTM
 import           Control.Monad.Class.MonadThrow
 
+-- MT: some documentation as to the purpose/use of module?
 
 data JobPool group m a = JobPool {
        jobsVar         :: !(TVar m (Map (group, ThreadId m) (Async m ()))),

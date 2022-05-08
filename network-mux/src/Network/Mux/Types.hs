@@ -80,14 +80,15 @@ newtype MiniProtocolNum = MiniProtocolNum Word16
   deriving (Eq, Ord, Enum, Ix, Show)
 
 -- | Per Miniprotocol limits
-data MiniProtocolLimits =
+newtype MiniProtocolLimits =
      MiniProtocolLimits {
        -- | Limit on the maximum number of bytes that can be queued in the
        -- miniprotocol's ingress queue.
        --
-       maximumIngressQueue :: !Int
+       maximumIngressQueue :: Int
      }
-
+  -- MT: if part of wire format, should this be a fixed width, E.g., Word16?
+  -- MT: revert this back to data with !  ? Because we plan to extend this type?
 
 -- $interface
 --

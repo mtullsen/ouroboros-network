@@ -201,7 +201,6 @@ data PeerSelectionActions peeraddr peerconn m = PeerSelectionActions {
        peerStateActions         :: PeerStateActions peeraddr peerconn m
      }
 
--- MT:KEY:
 -- | Callbacks which are performed to change peer state.
 --
 data PeerStateActions peeraddr peerconn m = PeerStateActions {
@@ -209,7 +208,7 @@ data PeerStateActions peeraddr peerconn m = PeerStateActions {
     --
     monitorPeerConnection    :: peerconn -> STM m PeerStatus,
 
-    -- | Establish new connection.
+    -- | Establish new connection: cold to warm.
     --
     establishPeerConnection  :: peeraddr -> m peerconn,
 
@@ -225,7 +224,8 @@ data PeerStateActions peeraddr peerconn m = PeerStateActions {
     --
     closePeerConnection      :: peerconn -> m ()
   }
-
+  -- MT: Nothing keeping users from using wrong 'peerconn's:  Might write more co-inductively/FuMa.?
+  
 -----------------------
 -- Peer Selection State
 --

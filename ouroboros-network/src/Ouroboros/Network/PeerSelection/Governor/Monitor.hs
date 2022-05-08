@@ -158,7 +158,7 @@ connections PeerSelectionActions{
              &&    Map.keysSet
                      (EstablishedPeers.toMap establishedPeers')
                 == establishedPeersSet')
-
+              -- MT: ^ complicated assert!
             Decision {
               decisionTrace = TraceDemoteAsynchronous demotions,
               decisionJobs  = [],

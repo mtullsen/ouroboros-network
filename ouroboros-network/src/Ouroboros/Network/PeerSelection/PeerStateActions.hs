@@ -33,7 +33,7 @@ import           Control.Monad.Class.MonadTimer
 
 import           Control.Concurrent.JobPool (Job (..), JobPool)
 import qualified Control.Concurrent.JobPool as JobPool
-import           Control.Tracer (Tracer, traceWith)
+import           Control.Tracer (Tracer, traceWith, debugTracer, nullTracer)
 
 import           Data.ByteString.Lazy (ByteString)
 import           Data.Functor (($>))
@@ -58,25 +58,22 @@ import           Ouroboros.Network.ConnectionManager.Types
 -- $doc
 -- = Introduction
 --
--- This module implements 'PeerStateActions', which provide the following
--- capabilities::
+-- This module implements 'withPeerStateActions', giving the user access to the
+-- 'PeerStateActions' API, which provides the following capabilities:
 --
--- [synchronous promotions / demotions]:
+--   [synchronous promotions / demotions]:
+--        * 'establishPeerConnection'
+--        * 'activatePeerConnection'
+--        * 'deactivatePeerConnection'
+--        * 'closePeerConnection'
+-- 
+--   [monitoring]: 'monitorPeerConnection' - returns the state of the connection.
 --
---      * 'establishPeerConnection'
---      * 'activatePeerConnection'
---      * 'deactivatePeerConnection'
---      * 'closePeerConnection'
---
--- [asynchronous demotions]:
---
--- Monitor mini-protocols and act on mini-protocol state changes done via
--- 'monitorPeerConnection'.
---
+--   [asynchronous demotions]: happens when a mini-protocol terminates or errors.
 --
 -- = Synchronous promotions / demotions
 --
--- Synchronous promotions / demotions are directly used by
+-- Synchronous promotions / demotions are used by
 -- 'Ouroboros.Network.PeerSelection.Governor.peerSelectionGovernor'.
 --
 -- [synchronous /cold → warm/ transition]:
@@ -86,11 +83,11 @@ import           Ouroboros.Network.ConnectionManager.Types
 --    below.
 --
 -- [synchronous /warm → hot/ transition]:
---    This transition quiesce warm protocols and starts hot protocols.  There
+--    This transition quiesces warm protocols and starts hot protocols.  There
 --    is no timeout to quiesce warm mini-protocols.  The tip-sample protocol
 --    which is the only planned warm protocol has some states that have
 --    a longer timeout when the remote peer has agency, but it does not
---    transfers much data.
+--    transfer much data.
 --
 -- [synchronous /hot → warm/ transition]:
 --    Within a timeout, stop hot protocols and let the warm protocols continue
@@ -110,10 +107,10 @@ import           Ouroboros.Network.ConnectionManager.Types
 -- = Monitoring Loop
 --
 -- The monitoring loop is responsible for taking an action when one of the
--- mini-protocols either terminates or errors.  Except termination of a hot
--- protocols we shall close the connection.  When one of the hot protocols
--- terminates we trigger a synchronous /hot → warm/ transition.
---
+-- mini-protocols either terminates or errors.  When a mini-protocol terminates
+--  * if (mini-protocol was hot): trigger a synchronous /hot → warm/ transition.
+--  * otherwise: close the connection.  [MT: haddock good?]
+--  
 -- The monitoring loop is supposed to stop when the multiplexer stops.
 --
 -- Note that the monitoring loop must act as soon as one of the mini-protocols
@@ -142,7 +139,7 @@ import           Ouroboros.Network.ConnectionManager.Types
 -- 'PeerStateActions' are build on top of 'ConnectionManager' which provides
 -- a primitive to present us a negotiated connection (i.e. after running
 -- the handshake) and the multiplexer api which allows to start mini-protocols
--- and track their termination via an 'STM' interface.  Each connection has
+-- and track their termination via an 'STM' interface.  Each connection has an
 -- associated 'PeerConnectionHandle' which holds all the data associated with
 -- a connection.
 --
@@ -393,6 +390,11 @@ awaitAllResults tok bundle = do
 -- Internals: peer state & connection handle
 --
 
+-- MT: This data type is never read except through "getCurrentState", so 
+-- the point of using this (rather than PeerStatus) is what: ?
+--   A. future use?
+--   B. used for tracing? (is it?)
+--   C. am I missing something?
 
 data PeerState
   = PeerStatus      !PeerStatus
@@ -401,8 +403,9 @@ data PeerState
   | DemotingToWarm
   | DemotingToCold  !PeerStatus
   -- ^ 'DemotingToCold' also contains the initial state of the peer.
+     -- MT: not seeing this!
   deriving Eq
-
+  
 
 -- | Return the current state of the peer, as it should be viewed by the
 -- governor.
@@ -413,7 +416,7 @@ getCurrentState PromotingToWarm             = PeerCold
 getCurrentState PromotingToHot              = PeerWarm
 getCurrentState DemotingToWarm              = PeerHot
 getCurrentState (DemotingToCold peerStatus) = peerStatus
-
+  -- MT: FIXME[C2]: rename to getPeerStatus
 
 -- |  Each established connection has access to 'PeerConnectionHandle'.  It
 -- allows to promote / demote or close the connection, by having access to
@@ -426,7 +429,6 @@ data PeerConnectionHandle (muxMode :: MuxMode) peerAddr bytes m a b = PeerConnec
     pchMux          :: Mux.Mux muxMode m,
     pchAppHandles   :: Bundle (ApplicationHandle muxMode bytes m a b)
   }
-  -- MT: Mux, Bundle - complic. type level stuff
   
 instance Show peerAddr
       => Show (PeerConnectionHandle muxMode peerAddr bytes m a b) where
@@ -589,7 +591,10 @@ withPeerStateActions PeerStateActionsArguments {
           `orElse`
             (WithSomeProtocolTemperature . WithHot
               <$> awaitFirstResult TokHot pchAppHandles)
-
+           -- MT: Q. we don't know what ProtocolTemperature we are in??
+            
+        -- traceWith debugTracer (PeerMonitoringResult pchConnectionId r)
+        traceWith nullTracer (PeerMonitoringResult pchConnectionId r)
         traceWith spsTracer (PeerMonitoringResult pchConnectionId r)
         case r of
           --
@@ -603,8 +608,6 @@ withPeerStateActions PeerStateActionsArguments {
           -- updated by the finally handler of a connection handler.
           --
 
-          -- MT: type-level reason for WithSomeProtocolTemperature on all patterns?
-          
           WithSomeProtocolTemperature (WithHot MiniProtocolError{}) -> do
             traceWith spsTracer (PeerStatusChanged (HotToCold pchConnectionId))
             atomically (writeTVar pchPeerState (PeerStatus PeerCold))
@@ -634,9 +637,9 @@ withPeerStateActions PeerStateActionsArguments {
             peerMonitoringLoop pch
 
           -- If an /established/ or /warm/ we demote the peer to 'PeerCold'.
-          -- Warm protocols are quieced when a peer becomes hot, but never
+          -- Warm protocols are quiesced when a peer becomes hot, but never
           -- terminated by 'PeerStateActions' (with the obvious exception of
-          -- 'closePeerConnection'); also established mini-protocols are not
+          -- 'closePeerConnection'); also, established mini-protocols are not
           -- supposed to terminate (unless the remote peer did something
           -- wrong).
           WithSomeProtocolTemperature (WithWarm MiniProtocolSuccess {}) ->
@@ -709,7 +712,7 @@ withPeerStateActions PeerStateActionsArguments {
                                         throwIO e)
                                      (peerMonitoringLoop connHandle $> Nothing))
                                    (return . Just)
-                                   ()
+                                   ()  -- MT: the group!
                                    ("peerMonitoringLoop " ++ show remoteAddress))
               pure connHandle
 
@@ -1003,7 +1006,7 @@ startProtocols tok PeerConnectionHandle { pchMux, pchAppHandles } = do
                       miniProtocolNum,
                       miniProtocolRun
                     } = do
-
+      
       case miniProtocolRun of
         InitiatorProtocolOnly initiator ->
             Mux.runMiniProtocol
@@ -1017,7 +1020,7 @@ startProtocols tok PeerConnectionHandle { pchMux, pchAppHandles } = do
               Mux.InitiatorDirection
               Mux.StartEagerly
               (runMuxPeer initiator . fromChannel)
-
+          
 --
 -- Trace
 --

@@ -986,7 +986,7 @@ runM Interfaces
                     $ \(peerStateActions
                           :: NodeToNodePeerStateActions
                                InitiatorResponderMode ntnAddr m ()) ->
-
+                               -- MT: '()' ? Previously Void was used. ?
                     --
                     -- Run peer selection (p2p governor)
                     --

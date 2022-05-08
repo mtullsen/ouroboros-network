@@ -48,7 +48,7 @@
 --
 -- The calls 'requestOutboundConnection' and 'includeInboundConnection' return
 -- once a connection has been negotiated.  The returned 'handle' contains all
--- the information that is need to start and monitor mini-protocols through
+-- the information that is needed to start and monitor mini-protocols through
 -- the mux interface.
 --
 -- For inbound connections, the connection manager will pass handle (also after
@@ -79,6 +79,10 @@
 -- Termination procedure as well as connection state machine is not described in
 -- this haddock, see associated specification.
 --
+
+-- MT: references to PeerStateActions and P2P Governor feel misplaced as these
+-- are defined in a calling package!
+
 module Ouroboros.Network.ConnectionManager.Types
   ( -- * Connection manager core types
     -- ** Connection Types
