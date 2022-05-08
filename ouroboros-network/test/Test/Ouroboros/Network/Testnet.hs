@@ -73,8 +73,10 @@ import           TestLib.InboundGovernor
                      (verifyRemoteTransition, verifyRemoteTransitionOrder,
                      remoteStrIsFinalTransition)
 
+import qualified Debug.Trace -- MT
+
 tests :: TestTree
-tests =
+tests = 
   testGroup "Ouroboros.Network.Testnet"
   [ testGroup "multinodeSim"
     [ testProperty "diffusionScript fixupCommands idempotent"
@@ -101,7 +103,6 @@ tests =
                    prop_diffusion_timeouts_enforced
     ]
   ]
-
 
 -- Warning: be careful with writing properties that rely
 -- on trace events from multiple components environment.
