@@ -593,7 +593,7 @@ withPeerStateActions PeerStateActionsArguments {
               <$> awaitFirstResult TokHot pchAppHandles)
            -- MT: Q. we don't know what ProtocolTemperature we are in??
             
-        -- traceWith debugTracer (PeerMonitoringResult pchConnectionId r)
+        traceWith debugTracer $ show (PeerMonitoringResult pchConnectionId r)
         traceWith nullTracer (PeerMonitoringResult pchConnectionId r)
         traceWith spsTracer (PeerMonitoringResult pchConnectionId r)
         case r of
