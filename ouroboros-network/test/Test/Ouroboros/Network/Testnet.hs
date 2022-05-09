@@ -421,7 +421,7 @@ prop_diffusion_target_established_public defaultBearerInfo diffScript =
                   @NtNAddr
                . Trace.fromList (MainReturn (Time 0) () [])
                . fmap (\(t, tid, tl, te) -> SimEvent t tid tl te)
-               . take 500000
+               . take 125000
                . traceEvents
                $ runSimTrace sim
 
@@ -515,7 +515,7 @@ prop_diffusion_target_active_public defaultBearerInfo diffScript =
                   @NtNAddr
                . Trace.fromList (MainReturn (Time 0) () [])
                . fmap (\(t, tid, tl, te) -> SimEvent t tid tl te)
-               . take 500000
+               . take 125000
                . traceEvents
                $ runSimTrace sim
 
