@@ -11,6 +11,7 @@ module Ouroboros.Consensus.MiniProtocol.ChainSync.Server (
   , chainSyncHeadersServer
     -- * Trace events
   , TraceChainSyncServerEvent (..)
+  , TraceChainSyncServerInfo (..)
   ) where
 
 import           Control.Tracer
@@ -112,26 +113,28 @@ chainSyncServerForFollower tracer chainDB flr =
     handleRequestNext = ChainDB.followerInstruction flr >>= \case
       Just update -> do
         tip <- atomically $ ChainDB.getCurrentTip chainDB
-        traceWith tracer $
-          TraceChainSyncServerRead tip (point <$> update)
-        Left <$> sendNext tip update
+        let traceInfo = TraceChainSyncServerInfo tip (point <$> update)
+        traceWith tracer $ TraceChainSyncServerRead traceInfo
+        return $ Left $ sendNext traceInfo update
       Nothing     -> return $ Right $ do
         -- Follower is at the head, we have to block and wait for the chain to
         -- change.
         update <- ChainDB.followerInstructionBlocking flr
         tip    <- atomically $ ChainDB.getCurrentTip chainDB
-        traceWith tracer $
-          TraceChainSyncServerReadBlocked tip (point <$> update)
-        sendNext tip update
+        let traceInfo = TraceChainSyncServerInfo tip (point <$> update)
+        traceWith tracer $ TraceChainSyncServerReadBlocked traceInfo
+        return $ sendNext traceInfo update
 
-    sendNext :: Tip blk
+    sendNext :: TraceChainSyncServerInfo blk
              -> ChainUpdate blk (WithPoint blk b)
-             -> m (ServerStNext b (Point blk) (Tip blk) m ())
-    sendNext tip update = case update of
-      AddBlock hdr -> do
-        traceWith tracer (TraceChainSyncRollForward (point hdr))
-        return $ SendMsgRollForward (withoutPoint hdr) tip idle'
-      RollBack pt  -> return $ SendMsgRollBackward pt tip idle'
+             -> ServerStNext b (Point blk) (Tip blk) m ()
+    sendNext traceInfo@(TraceChainSyncServerInfo tip _) = \case
+        AddBlock hdr -> SendMsgRollForward (withoutPoint hdr) tip traceThenIdle
+        RollBack pt  -> SendMsgRollBackward pt tip traceThenIdle
+      where
+        traceThenIdle = ChainSyncServer $ do
+          traceWith tracer $ TraceChainSyncServerSent traceInfo
+          return idle
 
     handleFindIntersect :: [Point blk]
                         -> m (ServerStIntersect b (Point blk) (Tip blk) m ())
@@ -148,12 +151,20 @@ chainSyncServerForFollower tracer chainDB flr =
 -------------------------------------------------------------------------------}
 
 -- | Events traced by the Chain Sync Server.
---
--- The whole headers/blocks in the traced 'ChainUpdate' are substituted with
--- their corresponding 'Point'.
-data TraceChainSyncServerEvent blk
-  = TraceChainSyncServerRead        (Tip blk) (ChainUpdate blk (Point blk))
-  | TraceChainSyncServerReadBlocked (Tip blk) (ChainUpdate blk (Point blk))
-  | TraceChainSyncRollForward       (Point blk)
-  | TraceChainSyncRollBackward      (Point blk)
+data TraceChainSyncServerEvent blk =
+    -- | Read a chain update instruction non-blockingly.
+    TraceChainSyncServerRead        (TraceChainSyncServerInfo blk)
+    -- | Read a chain update instruction blockingly.
+  | TraceChainSyncServerReadBlocked (TraceChainSyncServerInfo blk)
+    -- | Sent a chain update instruction.
+  | TraceChainSyncServerSent        (TraceChainSyncServerInfo blk)
+  deriving (Eq, Show)
+
+data TraceChainSyncServerInfo blk =
+    TraceChainSyncServerInfo
+      (Tip blk)
+      -- ^ Tip of the currently selected chain.
+      (ChainUpdate blk (Point blk))
+      -- ^ The whole headers/blocks in the traced 'ChainUpdate' are substituted
+      -- with their corresponding 'Point'.
   deriving (Eq, Show)
