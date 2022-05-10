@@ -33,7 +33,8 @@ import           Control.Monad.Class.MonadTimer
 
 import           Control.Concurrent.JobPool (Job (..), JobPool)
 import qualified Control.Concurrent.JobPool as JobPool
-import           Control.Tracer (Tracer, traceWith, debugTracer, nullTracer)
+import           Control.Tracer (Tracer, traceWith)
+import           Control.Tracer (debugTracer, contramap) -- MT: debugging
 
 import           Data.ByteString.Lazy (ByteString)
 import           Data.Functor (($>))
@@ -549,7 +550,7 @@ withPeerStateActions
 withPeerStateActions PeerStateActionsArguments {
                        spsDeactivateTimeout,
                        spsCloseConnectionTimeout,
-                       spsTracer,
+                       spsTracer=_spsTracer,
                        spsConnectionManager
                      }
                      k = do
@@ -564,6 +565,8 @@ withPeerStateActions PeerStateActionsArguments {
 
   where
 
+    spsTracer = contramap show debugTracer -- MT: spit out tracing to stderr
+    
     -- Update PeerState with the new state only if the current state isn't
     -- cold. Returns True if the state wasn't PeerCold
     updateUnlessCold :: StrictTVar m PeerState -> PeerState -> STM m Bool
@@ -593,8 +596,6 @@ withPeerStateActions PeerStateActionsArguments {
               <$> awaitFirstResult TokHot pchAppHandles)
            -- MT: Q. we don't know what ProtocolTemperature we are in??
             
-        traceWith debugTracer $ show (PeerMonitoringResult pchConnectionId r)
-        traceWith nullTracer (PeerMonitoringResult pchConnectionId r)
         traceWith spsTracer (PeerMonitoringResult pchConnectionId r)
         case r of
           --

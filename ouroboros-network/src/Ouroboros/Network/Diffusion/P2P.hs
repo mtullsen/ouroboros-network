@@ -977,7 +977,8 @@ runM Interfaces
                   -- tracks threads forked by 'PeerStateActions'
                   --
 
-                  Debug.Trace.trace "withPeerStateActions\n" $ withPeerStateActions
+                  -- Debug.Trace.trace "withPeerStateActions\n" $ -- MT
+                  withPeerStateActions
                     PeerStateActionsArguments {
                         spsTracer = dtPeerSelectionActionsTracer,
                         spsDeactivateTimeout = Diffusion.Policies.deactivateTimeout,
