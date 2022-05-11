@@ -60,7 +60,7 @@ instance Show peerAddr
 -- of these messages; there are two producers: accept loop and connection
 -- handler for outbound connections.
 --
--- MT: last sentence DUIS
+-- MT: last sentence is DOU.
 type ServerControlChannel (muxMode :: MuxMode) peerAddr bytes m a b =
     ControlChannel m (NewConnection peerAddr (Handle muxMode peerAddr bytes m a b))
 
@@ -76,7 +76,7 @@ data ControlChannel m msg =
   }
   -- GR-FIXME[C2]: the 'msg' tyvar appears to be always instantiated to
   --   'NewConnection ...'
-  --   i.e., unnecessary polymorphism: reason for? intended?
+  --   i.e., unnecessary polymorphism: reason for? to avoid dup of (NewConnection ...)?
 
 
 newControlChannel :: forall m srvCntrlMsg.
@@ -84,7 +84,8 @@ newControlChannel :: forall m srvCntrlMsg.
                   => m (ControlChannel m srvCntrlMsg)
 newControlChannel = do
     -- Queue size: events will come either from the accept loop or from the
-    -- connection manager (when it included an outbound duplex connection).
+    -- connection manager (when it includes an outbound duplex connection).
+    -- MT: above is DOU.
     channel <-
       atomically $
         newTBQueue 10                             -- G-FIXME[R]: magic number
@@ -125,3 +126,5 @@ newInboundConnection
 newInboundConnection channel connId dataFlow handle =
     writeMessage channel
                  (NewConnection Inbound connId dataFlow handle)
+
+-- MT: Suggestion: inline the last two, each called just 1x in *.ConnectionManager.Core

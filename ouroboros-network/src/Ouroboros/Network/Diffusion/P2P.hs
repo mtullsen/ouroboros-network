@@ -666,7 +666,7 @@ runM Interfaces
                          _                 ->
                              throwIO (NoSocket :: Failure RemoteAddress)
                                       -- MT: ^ huh?
-                                      -- MT: NoSocket never pat-matched on
+                                      -- MT: NoSocket never pat-matched on (in this pkg)
 
     -- control channel for the server; only required in
     -- @'InitiatorResponderMode' :: 'MuxMode'@
@@ -677,7 +677,7 @@ runM Interfaces
             pure (HasInitiator CMDInInitiatorMode)
           InitiatorAndResponderDiffusionMode ->
             -- we pass 'Server.newOutboundConnection serverControlChannel' to
-            -- connection handler
+            -- connection handler [MT: comment: huh? feels out of context. DEI?]
             HasInitiatorResponder <$>
               (CMDInInitiatorResponderMode
                 <$> Server.newControlChannel
