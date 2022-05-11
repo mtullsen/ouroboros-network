@@ -814,14 +814,11 @@ runM Interfaces
                           cmAddressType         = diNtnAddressType,
                           cmSnocket             = diNtnSnocket,
                           connectionDataFlow    = uncurry diNtnDataFlow,
-                          cmPrunePolicy         =
-                            case cmdInMode of
-                              HasInitiator CMDInInitiatorMode ->
+                          cmPrunePolicy         = simplePrunePolicy,
                                 -- Server is not running, it will not be able to
                                 -- advise which connections to prune.  It's also not
                                 -- expected that the governor targets will be larger
                                 -- than limits imposed by 'cmConnectionsLimits'.
-                                simplePrunePolicy,
                           cmConnectionsLimits   = daAcceptedConnectionsLimit,
                           cmTimeWaitTimeout     = daTimeWaitTimeout,
                           cmOutboundIdleTimeout = daProtocolIdleTimeout
@@ -938,10 +935,7 @@ runM Interfaces
                           cmAddressType         = diNtnAddressType,
                           cmSnocket             = diNtnSnocket,
                           connectionDataFlow    = uncurry diNtnDataFlow,
-                          cmPrunePolicy         =
-                            case cmdInMode of
-                              HasInitiatorResponder (CMDInInitiatorResponderMode _ serverStateVar) ->
-                                Diffusion.Policies.prunePolicy serverStateVar,
+                          cmPrunePolicy         = Diffusion.Policies.prunePolicy observableStateVar,
                           cmConnectionsLimits   = daAcceptedConnectionsLimit,
                           cmTimeWaitTimeout     = daTimeWaitTimeout,
                           cmOutboundIdleTimeout = daProtocolIdleTimeout
