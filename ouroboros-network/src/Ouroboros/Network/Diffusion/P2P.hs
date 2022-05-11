@@ -659,56 +659,19 @@ runM Interfaces
                 -> throwIO (UnexpectedIPv6Address addr)
       Nothing   -> pure ()
 
-    lookupReqs <- case (cmIPv4Address, cmIPv6Address) of
-                         (Just _, Nothing) -> return LookupReqAOnly
-                         (Nothing, Just _) -> return LookupReqAAAAOnly
-                         (Just _, Just _)  -> return LookupReqAAndAAAA
-                         _                 ->
-                             throwIO (NoSocket :: Failure RemoteAddress)
-                                      -- MT: ^ huh?
-                                      -- MT: NoSocket never pat-matched on (in this pkg)
-
-    -- control channel for the server; only required in
-    -- @'InitiatorResponderMode' :: 'MuxMode'@
-    cmdInMode
-      <- case diffusionMode of
-          InitiatorOnlyDiffusionMode ->
-            -- action which we pass to connection handler
-            pure (HasInitiator CMDInInitiatorMode)
-          InitiatorAndResponderDiffusionMode ->
-            -- we pass 'Server.newOutboundConnection serverControlChannel' to
-            -- connection handler [MT: comment: huh? feels out of context. DEI?]
-            HasInitiatorResponder <$>
-              (CMDInInitiatorResponderMode
-                <$> Server.newControlChannel
-                <*> Server.newObservableStateVar ntnInbgovRng)
-
-    localControlChannel <- Server.newControlChannel
-    localServerStateVar <- Server.newObservableStateVar ntcInbgovRng
-
-    -- RNGs used for picking random peers from the ledger and for
-    -- demoting/promoting peers.
-    policyRngVar <- newTVarIO policyRng
-
-    churnModeVar <- newTVarIO ChurnModeNormal
-
-    peerSelectionTargetsVar <- newTVarIO $ daPeerSelectionTargets {
-        -- Start with a smaller number of active peers, the churn governor will increase
-        -- it to the configured value after a delay.
-        targetNumberOfActivePeers =
-          min 2 (targetNumberOfActivePeers daPeerSelectionTargets)
-      }
-    let
-        --
-        -- local connection manager
-        --
-        localThread :: Maybe (m Void)
+    --
+    -- local connection manager
+    --
+    let localThread :: Maybe (m Void)
         localThread =
           case daLocalAddress of
             Nothing -> Nothing
             Just localAddr ->
               Just $ withLocalSocket tracer diNtcGetFileDescriptor diNtcSnocket localAddr
                        $ \localSocket -> do
+                localControlChannel <- Server.newControlChannel
+                localServerStateVar <- Server.newObservableStateVar ntcInbgovRng
+
                 let localConnectionLimits = AcceptedConnectionsLimit maxBound maxBound 0
 
                     localConnectionHandler :: NodeToClientConnectionHandler
@@ -777,12 +740,48 @@ runM Interfaces
                             serverControlChannel        = localControlChannel,
                             serverObservableStateVar    = localServerStateVar
                           }) Async.wait
+                      
+    --
+    -- remote connection manager
+    --
+    lookupReqs <- case (cmIPv4Address, cmIPv6Address) of
+                         (Just _, Nothing) -> return LookupReqAOnly
+                         (Nothing, Just _) -> return LookupReqAAAAOnly
+                         (Just _, Just _)  -> return LookupReqAAndAAAA
+                         _                 ->
+                             throwIO (NoSocket :: Failure RemoteAddress)
+                                      -- MT: ^ huh?
+                                      -- MT: NoSocket never pat-matched on (in this pkg)
 
-        --
-        -- remote connection manager
-        --
+    -- control channel for the server; only required in
+    -- @'InitiatorResponderMode' :: 'MuxMode'@
+    cmdInMode
+      <- case diffusionMode of
+          InitiatorOnlyDiffusionMode ->
+            -- action which we pass to connection handler
+            pure (HasInitiator CMDInInitiatorMode)
+          InitiatorAndResponderDiffusionMode ->
+            -- we pass 'Server.newOutboundConnection serverControlChannel' to
+            -- connection handler [MT: comment: huh? feels out of context. DEI?]
+            HasInitiatorResponder <$>
+              (CMDInInitiatorResponderMode
+                <$> Server.newControlChannel
+                <*> Server.newObservableStateVar ntnInbgovRng)
 
-        remoteThread :: m Void
+    -- RNGs used for picking random peers from the ledger and for
+    -- demoting/promoting peers.
+    policyRngVar <- newTVarIO policyRng
+
+    churnModeVar <- newTVarIO ChurnModeNormal
+
+    peerSelectionTargetsVar <- newTVarIO $ daPeerSelectionTargets {
+        -- Start with a smaller number of active peers, the churn governor will increase
+        -- it to the configured value after a delay.
+        targetNumberOfActivePeers =
+          min 2 (targetNumberOfActivePeers daPeerSelectionTargets)
+      }
+    
+    let remoteThread :: m Void
         remoteThread =
           withLedgerPeers
             ledgerPeersRng
@@ -1052,7 +1051,6 @@ runM Interfaces
                                     $ \churnGovernorThread ->
 
                                       -- wait for any thread to fail
-                                      -- MT: TODO
                                       snd <$> Async.waitAny
                                         (maybeToList mbLocalPeerRootProviderThread
                                         ++ [ serverThread
