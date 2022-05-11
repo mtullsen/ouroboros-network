@@ -675,7 +675,7 @@ runM Interfaces
           InitiatorOnlyDiffusionMode ->
             -- action which we pass to connection handler
             pure (HasInitiator CMDInInitiatorMode)
-          InitiatorAndResponderDiffusionMode -> do
+          InitiatorAndResponderDiffusionMode ->
             -- we pass 'Server.newOutboundConnection serverControlChannel' to
             -- connection handler
             HasInitiatorResponder <$>
@@ -698,9 +698,7 @@ runM Interfaces
         targetNumberOfActivePeers =
           min 2 (targetNumberOfActivePeers daPeerSelectionTargets)
       }
-
-    let localConnectionLimits = AcceptedConnectionsLimit maxBound maxBound 0
-
+    let
         --
         -- local connection manager
         --
@@ -711,7 +709,9 @@ runM Interfaces
             Just localAddr ->
               Just $ withLocalSocket tracer diNtcGetFileDescriptor diNtcSnocket localAddr
                        $ \localSocket -> do
-                let localConnectionHandler :: NodeToClientConnectionHandler
+                let localConnectionLimits = AcceptedConnectionsLimit maxBound maxBound 0
+
+                    localConnectionHandler :: NodeToClientConnectionHandler
                                                 ntcFd ntcAddr ntcVersion ntcVersionData m
                     localConnectionHandler =
                       makeConnectionHandler
