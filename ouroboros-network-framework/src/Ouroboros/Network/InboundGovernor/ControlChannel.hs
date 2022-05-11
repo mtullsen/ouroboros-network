@@ -28,7 +28,7 @@ import           Ouroboros.Network.ConnectionId (ConnectionId (..))
 import           Ouroboros.Network.ConnectionManager.Types
 
 
--- | Announcment message for a new connection.
+-- | Announcement message for a new connection.
 --
 data NewConnection peerAddr handle
 
@@ -57,9 +57,13 @@ instance Show peerAddr
 
 -- | Server control channel.  It allows to pass 'STM' transactions which will
 -- resolve to 'NewConnection'.   Server's monitoring thread is the consumer
--- of these messages; there are two produceres: accept loop and connection
+-- of these messages; there are two producers: accept loop and connection
 -- handler for outbound connections.
 --
+-- MT: last sentence DUIS
+type ServerControlChannel (muxMode :: MuxMode) peerAddr bytes m a b =
+    ControlChannel m (NewConnection peerAddr (Handle muxMode peerAddr bytes m a b))
+
 data ControlChannel m msg =
   ControlChannel {
     -- | Read a single 'NewConnection' instruction from the channel.
@@ -70,17 +74,16 @@ data ControlChannel m msg =
     --
     writeMessage :: msg -> STM m ()
   }
-
-
-type ServerControlChannel (muxMode :: MuxMode) peerAddr bytes m a b =
-    ControlChannel m (NewConnection peerAddr (Handle muxMode peerAddr bytes m a b))
+  -- GR-FIXME[C2]: the 'msg' tyvar appears to be always instantiated to
+  --   'NewConnection ...'
+  --   i.e., unnecessary polymorphism: reason for? intended?
 
 
 newControlChannel :: forall m srvCntrlMsg.
                      MonadLabelledSTM m
                   => m (ControlChannel m srvCntrlMsg)
 newControlChannel = do
-    -- Queue size: events will come eihter from the accept loop or from the
+    -- Queue size: events will come either from the accept loop or from the
     -- connection manager (when it included an outbound duplex connection).
     channel <-
       atomically $
