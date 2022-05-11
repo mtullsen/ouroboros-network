@@ -57,12 +57,12 @@ instance Show peerAddr
 
 -- | Server control channel.  It allows to pass 'STM' transactions which will
 -- resolve to 'NewConnection'.   Server's monitoring thread is the consumer
--- of this messages; there are two produceres: accept loop and connection
+-- of these messages; there are two produceres: accept loop and connection
 -- handler for outbound connections.
 --
 data ControlChannel m msg =
   ControlChannel {
-    -- | Read a single 'NewConnection' instructrion from the channel.
+    -- | Read a single 'NewConnection' instruction from the channel.
     --
     readMessage  :: STM m msg,
 
