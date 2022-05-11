@@ -56,6 +56,8 @@ import           Ouroboros.Network.ConnectionHandler (Handle (..),
                      HandleError (..), MuxConnectionManager)
 import           Ouroboros.Network.ConnectionManager.Types
 
+-- MT: there's something just a little odd about the haddock here
+
 -- $doc
 -- = Introduction
 --
@@ -109,8 +111,9 @@ import           Ouroboros.Network.ConnectionManager.Types
 --
 -- The monitoring loop is responsible for taking an action when one of the
 -- mini-protocols either terminates or errors.  When a mini-protocol terminates
---  * if (mini-protocol was hot): trigger a synchronous /hot → warm/ transition.
---  * otherwise: close the connection.  [MT: haddock good?]
+-- 
+--    * if (mini-protocol was hot): trigger a synchronous /hot → warm/ transition.
+--    * otherwise: close the connection.  [MT:TODO: haddock good?]
 --  
 -- The monitoring loop is supposed to stop when the multiplexer stops.
 --

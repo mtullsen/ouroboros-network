@@ -296,6 +296,9 @@ So we have six transitions to consider:
  * demote a warm peer to cold
  * forget a cold peer
 
+(Excluding the transitions in which any peer determined to be adversarial is
+forgotten.)
+
 We want a design that separates the policy from the mechanism. We must
 consider what kinds of policy we might like to express and make sure that
 information that the policy needs can be made available.
