@@ -34,7 +34,7 @@ import           Control.Monad.Class.MonadTimer
 import           Control.Concurrent.JobPool (Job (..), JobPool)
 import qualified Control.Concurrent.JobPool as JobPool
 import           Control.Tracer (Tracer, traceWith)
-import           Control.Tracer (debugTracer, contramap) -- MT: debugging
+import           Control.Tracer (debugTracer, contramap) -- MT-TEMP: debugging
 
 import           Data.ByteString.Lazy (ByteString)
 import           Data.Functor (($>))
@@ -56,7 +56,8 @@ import           Ouroboros.Network.ConnectionHandler (Handle (..),
                      HandleError (..), MuxConnectionManager)
 import           Ouroboros.Network.ConnectionManager.Types
 
--- MT: there's something just a little odd about the haddock here
+-- GR-FIXME[D3]: The results of the haddock are odd, the TOC is odd and not matching
+-- the sections in the page.
 
 -- $doc
 -- = Introduction
@@ -113,7 +114,7 @@ import           Ouroboros.Network.ConnectionManager.Types
 -- mini-protocols either terminates or errors.  When a mini-protocol terminates
 -- 
 --    * if (mini-protocol was hot): trigger a synchronous /hot → warm/ transition.
---    * otherwise: close the connection.  [MT:TODO: haddock good?]
+--    * otherwise: close the connection.  [MT-TODO: haddock good?]
 --  
 -- The monitoring loop is supposed to stop when the multiplexer stops.
 --
@@ -394,7 +395,7 @@ awaitAllResults tok bundle = do
 -- Internals: peer state & connection handle
 --
 
--- MT: This data type is never read except through "getCurrentState", so 
+-- GR-FIXME[R]: 'PeerState' is never read except through 'getCurrentState', so 
 -- the point of using this (rather than PeerStatus) is what: ?
 --   A. future use?
 --   B. used for tracing? (is it?)
@@ -407,7 +408,7 @@ data PeerState
   | DemotingToWarm
   | DemotingToCold  !PeerStatus
   -- ^ 'DemotingToCold' also contains the initial state of the peer.
-     -- MT: not seeing this!
+     -- GR-FIXME[D]: not seeing this to be the case
   deriving Eq
   
 
@@ -420,7 +421,7 @@ getCurrentState PromotingToWarm             = PeerCold
 getCurrentState PromotingToHot              = PeerWarm
 getCurrentState DemotingToWarm              = PeerHot
 getCurrentState (DemotingToCold peerStatus) = peerStatus
-  -- MT: FIXME[C2]: rename to getPeerStatus
+  -- GR-FIXME[C2]: Suggestion: rename to getPeerStatus
 
 -- |  Each established connection has access to 'PeerConnectionHandle'.  It
 -- allows to promote / demote or close the connection, by having access to
@@ -553,7 +554,7 @@ withPeerStateActions
 withPeerStateActions PeerStateActionsArguments {
                        spsDeactivateTimeout,
                        spsCloseConnectionTimeout,
-                       spsTracer=_spsTracer,
+                       spsTracer=_spsTracer,  -- MT-TEMP
                        spsConnectionManager
                      }
                      k = do
@@ -568,7 +569,7 @@ withPeerStateActions PeerStateActionsArguments {
 
   where
 
-    spsTracer = contramap show debugTracer -- MT: spit out tracing to stderr
+    spsTracer = contramap show debugTracer -- MT-TEMP: spit out tracing to stderr
     
     -- Update PeerState with the new state only if the current state isn't
     -- cold. Returns True if the state wasn't PeerCold
@@ -597,7 +598,7 @@ withPeerStateActions PeerStateActionsArguments {
           `orElse`
             (WithSomeProtocolTemperature . WithHot
               <$> awaitFirstResult TokHot pchAppHandles)
-           -- MT: Q. we don't know what ProtocolTemperature we are in??
+           -- MT-TEMP: Aha: on the bundle, all temps.
             
         traceWith spsTracer (PeerMonitoringResult pchConnectionId r)
         case r of
@@ -716,7 +717,7 @@ withPeerStateActions PeerStateActionsArguments {
                                         throwIO e)
                                      (peerMonitoringLoop connHandle $> Nothing))
                                    (return . Just)
-                                   ()  -- MT: the group!
+                                   ()  -- MT-TEMP: the group identifier
                                    ("peerMonitoringLoop " ++ show remoteAddress))
               pure connHandle
 
@@ -916,7 +917,7 @@ withPeerStateActions PeerStateActionsArguments {
       -- 'unregisterOutboundConnection' could only fail to demote the peer if
       -- connection manager would simultaneously promote it, but this is not
       -- posible.
-        -- MT: huh?, why this comment here?
+        -- GR-FIXME[D2]: Don't understand, why this comment here.
       case res of
         Nothing -> do
           -- timeout fired

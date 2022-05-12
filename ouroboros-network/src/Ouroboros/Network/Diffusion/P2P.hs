@@ -817,6 +817,7 @@ runM Interfaces
                                 -- advise which connections to prune.  It's also not
                                 -- expected that the governor targets will be larger
                                 -- than limits imposed by 'cmConnectionsLimits'.
+                            
                           cmConnectionsLimits   = daAcceptedConnectionsLimit,
                           cmTimeWaitTimeout     = daTimeWaitTimeout,
                           cmOutboundIdleTimeout = daProtocolIdleTimeout
@@ -962,6 +963,7 @@ runM Interfaces
                              InitiatorResponderMode ntnFd ntnAddr ntnVersion m ()
                      ) -> do
                   diInstallSigUSR1Handler connectionManager
+                  
                   --
                   -- peer state actions
                   --
@@ -981,7 +983,6 @@ runM Interfaces
                     $ \(peerStateActions
                           :: NodeToNodePeerStateActions
                                InitiatorResponderMode ntnAddr m ()) ->
-                               -- MT: '()' ? Previously Void was used. ?
                     --
                     -- Run peer selection (p2p governor)
                     --
@@ -1010,7 +1011,6 @@ runM Interfaces
                           peerSelectionActions
                           (Diffusion.Policies.simplePeerSelectionPolicy
                             policyRngVar (readTVar churnModeVar) daPeerMetrics))
-                        -- FIXME: identical to prev. call to.
                         $ \governorThread ->
                         withSockets tracer diNtnSnocket
                                     ( catMaybes
@@ -1072,7 +1072,7 @@ runM Interfaces
     (fuzzRng,        rng4) = split rng3
     (ntnInbgovRng,   ntcInbgovRng) = split rng4
 
-    -- MT: TODO
+    -- MT-TODO: verify following.
     -- Only the 'IOManagerError's are fatal, all the other exceptions in the
     -- networking code will only shutdown the bearer (see 'ShutdownPeer' why
     -- this is so).
@@ -1190,7 +1190,6 @@ run tracers tracersExtra args argsExtra apps appsExtra = do
                  diDnsActions = ioDNSActions
                }
                tracers tracersExtra args argsExtra apps appsExtra
-                 -- MT: could eta reduce last 4 args
 
 --
 -- Data flow
@@ -1217,6 +1216,8 @@ localDataFlow :: ntcVersion
               -> DataFlow
 localDataFlow _ _ = Unidirectional
 
+
+-- MT: might these next two be split out of this long module?
 
 --
 -- Socket utility functions
