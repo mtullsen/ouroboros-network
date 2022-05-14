@@ -3,7 +3,7 @@ Ouroboros.Network.AnchoredSeq :
 Ouroboros.Network.Block : Ouroboros.Network.Point Ouroboros.Network.Util.ShowProxy
 Ouroboros.Network.BlockFetch : Ouroboros.Network.AnchoredFragment Ouroboros.Network.Block Ouroboros.Network.BlockFetch.ClientRegistry Ouroboros.Network.BlockFetch.ClientState Ouroboros.Network.BlockFetch.State Ouroboros.Network.DeltaQ
 Ouroboros.Network.BlockFetch.Client : Ouroboros.Network.AnchoredFragment Ouroboros.Network.Block Ouroboros.Network.BlockFetch.ClientState Ouroboros.Network.BlockFetch.DeltaQ Ouroboros.Network.NodeToNode.Version Ouroboros.Network.PeerSelection.PeerMetric.Type Ouroboros.Network.Protocol.BlockFetch.Type Ouroboros.Network.Mux
-Ouroboros.Network.BlockFetch.ClientRegistry : Ouroboros.Network.BlockFetch.ClientState Ouroboros.Network.DeltaQ
+Ouroboros.Network.BlockFetch.ClientRegistry : Ouroboros.Network.BlockFetch.ClientState Ouroboros.Network.DeltaQ Ouroboros.Network.NodeToNode.Version
 Ouroboros.Network.BlockFetch.ClientState : Ouroboros.Network.AnchoredFragment Ouroboros.Network.Block Ouroboros.Network.BlockFetch.DeltaQ Ouroboros.Network.Point Ouroboros.Network.Protocol.BlockFetch.Type Ouroboros.Network.Mux
 Ouroboros.Network.BlockFetch.Decision : Ouroboros.Network.AnchoredFragment Ouroboros.Network.Block Ouroboros.Network.BlockFetch.ClientState Ouroboros.Network.BlockFetch.DeltaQ Ouroboros.Network.Point
 Ouroboros.Network.BlockFetch.DeltaQ : Ouroboros.Network.DeltaQ
@@ -47,13 +47,13 @@ Ouroboros.Network.Protocol.LocalTxMonitor.Client : Ouroboros.Network.Protocol.Lo
 Ouroboros.Network.Protocol.LocalTxMonitor.Type : Ouroboros.Network.Util.ShowProxy
 Ouroboros.Network.Protocol.LocalTxSubmission.Client : Ouroboros.Network.Protocol.LocalTxSubmission.Type
 Ouroboros.Network.Protocol.LocalTxSubmission.Type : Ouroboros.Network.Util.ShowProxy
-Ouroboros.Network.Protocol.TxSubmission.Client : Ouroboros.Network.Protocol.TxSubmission.Type
-Ouroboros.Network.Protocol.TxSubmission.Server : Ouroboros.Network.Protocol.TxSubmission.Type
-Ouroboros.Network.Protocol.TxSubmission.Type : Ouroboros.Network.Util.ShowProxy
+Ouroboros.Network.Protocol.TxSubmission2.Client : Ouroboros.Network.Protocol.TxSubmission2.Type
+Ouroboros.Network.Protocol.TxSubmission2.Server : Ouroboros.Network.Protocol.TxSubmission2.Type
+Ouroboros.Network.Protocol.TxSubmission2.Type : Ouroboros.Network.Util.ShowProxy
 Ouroboros.Network.Tracers : Ouroboros.Network.Driver Ouroboros.Network.ErrorPolicy Ouroboros.Network.Protocol.Handshake.Type Ouroboros.Network.Socket Ouroboros.Network.Subscription.Dns Ouroboros.Network.Subscription.Ip
-Ouroboros.Network.TxSubmission.Inbound : Ouroboros.Network.NodeToNode.Version Ouroboros.Network.Protocol.TxSubmission.Server Ouroboros.Network.TxSubmission.Mempool.Reader
-Ouroboros.Network.TxSubmission.Mempool.Reader : Ouroboros.Network.Protocol.TxSubmission.Client
-Ouroboros.Network.TxSubmission.Outbound : Ouroboros.Network.NodeToNode.Version Ouroboros.Network.Protocol.TxSubmission.Client Ouroboros.Network.TxSubmission.Mempool.Reader Ouroboros.Network.Mux
+Ouroboros.Network.TxSubmission.Inbound : Ouroboros.Network.NodeToNode.Version Ouroboros.Network.Protocol.TxSubmission2.Server Ouroboros.Network.TxSubmission.Mempool.Reader
+Ouroboros.Network.TxSubmission.Mempool.Reader : Ouroboros.Network.Protocol.TxSubmission2.Client
+Ouroboros.Network.TxSubmission.Outbound : Ouroboros.Network.NodeToNode.Version Ouroboros.Network.Protocol.TxSubmission2.Client Ouroboros.Network.TxSubmission.Mempool.Reader Ouroboros.Network.Mux
 Data.Cache : 
 Data.Wedge : 
 Ouroboros.Network.Channel : 

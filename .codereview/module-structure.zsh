@@ -12,10 +12,16 @@ ln -s .codereview/te .
 ln -s .codereview/tm .
 ln -s .codereview/tf .
  
-alias pr = print
+setopt extendedglob
+alias pr=print
 
 # Most of the code below should work in any directory, so this file can
 # typically be a source of cut & paste.
+
+function section () {
+    echo "\n\n"
+    echo "----------" $1 "----------\n"
+}
 
 ############################################################
 # basic files of interest (as communicated by IOG)
@@ -31,44 +37,57 @@ export fsoi=$(pr -l */src/**/PeerSelection/PeerStateActions.hs \
                     */src/**/P2P.hs)
 
 ############################################################
-echo "generate tm/nwmodules.gr (the graph of all modules in"
-echo "  ouroboros-network/src/ and ouroboros-network-framework/src (no tests)"
+
+# make lists of our 'true' src files, exclude test files
+#  (we'll expand globs at references to)
+
+net_srcfiles=ouroboros-network/src/**/*.hs~**/Hello/*.hs
+  # a little adhoc, need to ignore 4 files!
+netf_srcfiles=ouroboros-network-framework/src/**/*.hs
+
+# print -l ${~net_srcfiles}
+# exit 1
+
+############################################################
+
+section "generate tm/nwmodules.gr"
+echo " (the graph of all modules in ouroboros-network/src/ and "
+echo "  ouroboros-network-framework/src (no tests)"
 
 (cd ${NWTOP};
- hsmodulegraph ouroboros-network/src/**/*.hs \
-               ouroboros-network-framework/src/**/*.hs  > tm/nwmodules.gr)
+ hsmodulegraph ${~net_srcfiles} ${~netf_srcfiles} > tm/nwmodules.gr)
 
 echo "generate tm/nwmodules.ns (just the node/module names):"
 cat tm/nwmodules.gr | sed -e 's/ : .*//;' | sort > tm/nwmodules.ns
 
+echo "\n\n"
 echo "... and display the graph with graphtool \n"
 cat tm/nwmodules.gr |
   graphtool "nodes -ig < - | display"
 
 ############################################################
-echo "generate tm/allmodules.gr:"
+section "generate tm/allmodules.gr:"
 echo "- so far, not too useful, includes the cardano-client/ pkg files)"
 (cd ${NWTOP}; 
  hsmodulegraph cardano-client/src/**/*.hs \
-               ouroboros-network/src/**/*.hs \
-               ouroboros-network-framework/src/**/*.hs  > tm/allmodules.gr)
+               ${~net_srcfiles} ${~netf_srcfiles} > tm/allmodules.gr)
 
 ############################################################
 # this useful for 'beginners' to the code:
 
-echo "create te/nwmodules.tagged-filenames"
-pecho " - labels the network files per which pkg they come from"
+section "create te/nwmodules.tagged-filenames"
+echo " - labels the network files per which pkg they come from"
 echo " - net: (ouroboros-network), netf: (ouroboros-network-framework)"
 
 (cd ${NWTOP}/ouroboros-network/src;
  pr -l **/*.hs | sed 's/^/net:  /') >! ${TMPDIR}/T1
-(cd ${NWTOP}/ouroboros-network-framework/src; pr -l /**/*.hs | sed 's/^/netf: /') >! ${TMPDIR}/T2
+(cd ${NWTOP}/ouroboros-network-framework/src; pr -l **/*.hs | sed 's/^/netf: /') >! ${TMPDIR}/T2
 cat ${TMPDIR}/{T1,T2} | sort -b -k2 > te/nwmodules.tagged-filenames
 
 ############################################################
-echo "define tm/key.ns:"
+section "define tm/key.ns"
 
-hsmodulegraph $fsoi |
+hsmodulegraph ${=fsoi} |        # note zsh word splitting
   graphtool "nodes -ig <- | print nodes" | sort >| tm/key0.ns
 
 echo TODO: define tm/key.ns
@@ -80,20 +99,21 @@ egrep -v "ConnectionManager.Types|Governor.Types" \
 
 ############################################################
   
-echo "display only 'key' modules (tm/key.ns) and dependents: \n"
+section "display 'key' modules and dependents"
 cat tm/nwmodules.gr |
   graphtool \
     "nodes -ig < - | roots $(paste -sd ' ' tm/key.ns) | display"
 
-echo "display the same in 'node' form:"
+echo "\ndisplay the same in 'node' form:\n"
 cat tm/nwmodules.gr |
   graphtool \
-    "nodes -ig < - | roots $(paste -sd ' ' tm/key.ns) | print no"
+    "nodes -ig < - | roots $(paste -sd ' ' tm/key.ns) | print nodes" |
+  sed 's/^/  /'
 
 
 ############################################################
 
-echo "let's visualize the least upper bound (LUB) of fsoi:"
+section "visualize least upper bound (LUB) of fsoi"
 graphtool                                \
   " nodes -ig < tm/nwmodules.gr          \
   | swap                                 \
@@ -128,9 +148,8 @@ graphtool                                \
 
 
 ############################################################
-
-echo "the subset of modules from P2P down (big graph!):"
-echo "... store results in tm/p2pdow.{gr,ns}:"
+section "subset of modules from P2P down"
+echo "... store results in tm/p2pdown.{gr,ns}:"
 
 graphtool \
   "nodes -ig < tm/nwmodules.gr    \
@@ -147,28 +166,28 @@ for f in $(sed "s#\.#/#g;s/$/.hs/" tm/p2pdown.ns); do
   echo */src/$f
   done > tm/p2pdown.filenames
 
-fsp2ptop=$(cat tm/p2pdown.filenames)
+export fsp2ptop=$(cat tm/p2pdown.filenames)
 
 ############################################################
 
-echo "graph of modules 'above' (which import, recursively) fsoi":
+section "modules which import (recursively) fsoi"
 graphtool                                \
   " nodes -ig < tm/nwmodules.gr          \
   | swap                                 \
   | root $(paste -sd ' ' tm/key.ns)      \
   | swap                                 \
-  | display" | less
+  | display"
 
 #  Just one thing learned:
 #   - one importer of Ouroboros.Network.Diffusion.P2P :
 #     Ouroboros.Network.Diffusion
 
 ############################################################
-echo "less useful, but module dependencies, each pkg separately:"
-echo ": ouroboros-network:"
-hsmodulegraph ouroboros-network/src/**/*.hs |
+section "module dependencies, each pkg separately"
+echo "\n : ouroboros-network:\n"
+hsmodulegraph ${~net_srcfiles} |
   graphtool "nodes -ig < - | di"
 
-echo ": ouroboros-network-framework:"
-hsmodulegraph ouroboros-network-framework/src/**/*.hs |
+echo "\n : ouroboros-network-framework:\n"
+hsmodulegraph ${~netf_srcfiles} |
   graphtool "nodes -ig < - | di"

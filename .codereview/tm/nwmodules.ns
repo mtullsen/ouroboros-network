@@ -101,14 +101,9 @@ Ouroboros.Network.Protocol.TipSample.Client
 Ouroboros.Network.Protocol.TipSample.Codec
 Ouroboros.Network.Protocol.TipSample.Server
 Ouroboros.Network.Protocol.TipSample.Type
-Ouroboros.Network.Protocol.Trans.Hello.Codec
-Ouroboros.Network.Protocol.Trans.Hello.Type
-Ouroboros.Network.Protocol.Trans.Hello.Util
-Ouroboros.Network.Protocol.TxSubmission.Client
-Ouroboros.Network.Protocol.TxSubmission.Codec
-Ouroboros.Network.Protocol.TxSubmission.Server
-Ouroboros.Network.Protocol.TxSubmission.Type
+Ouroboros.Network.Protocol.TxSubmission2.Client
 Ouroboros.Network.Protocol.TxSubmission2.Codec
+Ouroboros.Network.Protocol.TxSubmission2.Server
 Ouroboros.Network.Protocol.TxSubmission2.Type
 Ouroboros.Network.RethrowPolicy
 Ouroboros.Network.Server.ConnectionTable

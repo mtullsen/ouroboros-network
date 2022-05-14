@@ -47,9 +47,9 @@ ouroboros-network/src/Ouroboros/Network/Protocol/LocalTxMonitor/Client.hs
 ouroboros-network/src/Ouroboros/Network/Protocol/LocalTxMonitor/Type.hs
 ouroboros-network/src/Ouroboros/Network/Protocol/LocalTxSubmission/Client.hs
 ouroboros-network/src/Ouroboros/Network/Protocol/LocalTxSubmission/Type.hs
-ouroboros-network/src/Ouroboros/Network/Protocol/TxSubmission/Client.hs
-ouroboros-network/src/Ouroboros/Network/Protocol/TxSubmission/Server.hs
-ouroboros-network/src/Ouroboros/Network/Protocol/TxSubmission/Type.hs
+ouroboros-network/src/Ouroboros/Network/Protocol/TxSubmission2/Client.hs
+ouroboros-network/src/Ouroboros/Network/Protocol/TxSubmission2/Server.hs
+ouroboros-network/src/Ouroboros/Network/Protocol/TxSubmission2/Type.hs
 ouroboros-network/src/Ouroboros/Network/Tracers.hs
 ouroboros-network/src/Ouroboros/Network/TxSubmission/Inbound.hs
 ouroboros-network/src/Ouroboros/Network/TxSubmission/Mempool/Reader.hs

@@ -47,9 +47,9 @@ Ouroboros.Network.Protocol.LocalTxMonitor.Client
 Ouroboros.Network.Protocol.LocalTxMonitor.Type
 Ouroboros.Network.Protocol.LocalTxSubmission.Client
 Ouroboros.Network.Protocol.LocalTxSubmission.Type
-Ouroboros.Network.Protocol.TxSubmission.Client
-Ouroboros.Network.Protocol.TxSubmission.Server
-Ouroboros.Network.Protocol.TxSubmission.Type
+Ouroboros.Network.Protocol.TxSubmission2.Client
+Ouroboros.Network.Protocol.TxSubmission2.Server
+Ouroboros.Network.Protocol.TxSubmission2.Type
 Ouroboros.Network.Tracers
 Ouroboros.Network.TxSubmission.Inbound
 Ouroboros.Network.TxSubmission.Mempool.Reader
