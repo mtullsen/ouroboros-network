@@ -1,4 +1,6 @@
+Ouroboros.Network.ConnectionHandler
 Ouroboros.Network.ConnectionManager.Core
+Ouroboros.Network.Diffusion.P2P
 Ouroboros.Network.InboundGovernor
 Ouroboros.Network.InboundGovernor.ControlChannel
 Ouroboros.Network.InboundGovernor.Event

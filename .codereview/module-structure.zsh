@@ -45,6 +45,7 @@ net_srcfiles=ouroboros-network/src/**/*.hs~**/Hello/*.hs
   # a little adhoc, need to ignore 4 files!
 netf_srcfiles=ouroboros-network-framework/src/**/*.hs
 
+# debugging:
 # print -l ${~net_srcfiles}
 # exit 1
 
@@ -85,14 +86,12 @@ echo " - net: (ouroboros-network), netf: (ouroboros-network-framework)"
 cat ${TMPDIR}/{T1,T2} | sort -b -k2 > te/nwmodules.tagged-filenames
 
 ############################################################
-section "define tm/key.ns"
+section "define tm/key.ns & tm/key2.ns"
 
 hsmodulegraph ${=fsoi} |        # note zsh word splitting
-  graphtool "nodes -ig <- | print nodes" | sort >| tm/key0.ns
+  graphtool "nodes -ig <- | print nodes" | sort >| tm/key.ns
 
-echo TODO: define tm/key.ns
-
-echo "tm/key2.ns: tm/key.ns with highly-imported modules removed"
+echo "tm/key2.ns = tm/key.ns with highly-imported modules removed"
 egrep -v "ConnectionManager.Types|Governor.Types" \
   tm/key.ns >| tm/key2.ns
 
@@ -132,12 +131,12 @@ graphtool                                \
   #  - You are only nabbing nodes from the two packages (or 3)
   #  - You are ignoring that ouroboros-network exports a lot!
 
+echo 
 echo "the LUB is Ouroboros.Network.Diffusion.P2P"
-echo
-echo "the subset of modules from P2P down to all the 'key.ns' modules:"
 
-# Everything between P2P ("LUB of tm/key2.ns") and tm/key2.ns
-#  - captured above via $fsoi
+############################################################
+section "modules between P2P and 'key.ns' modules:"
+
 graphtool                                \
   " nodes -ig < tm/nwmodules.gr          \
   | root Ouroboros.Network.Diffusion.P2P \
@@ -148,7 +147,7 @@ graphtool                                \
 
 
 ############################################################
-section "subset of modules from P2P down"
+section "modules from P2P down"
 echo "... store results in tm/p2pdown.{gr,ns}:"
 
 graphtool \
@@ -159,6 +158,7 @@ graphtool "nodes -ig < tm/p2pdown.gr | print nodes" > tm/p2pdown.ns
 
 
 echo "... and display the graph:"
+
 graphtool "nodes -ig < tm/p2pdown.gr | display"
 
 # create file list variable from above:
