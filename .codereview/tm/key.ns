@@ -1,0 +1,15 @@
+Ouroboros.Network.ConnectionManager.Core
+Ouroboros.Network.ConnectionManager.Types
+Ouroboros.Network.InboundGovernor
+Ouroboros.Network.InboundGovernor.ControlChannel
+Ouroboros.Network.InboundGovernor.Event
+Ouroboros.Network.InboundGovernor.State
+Ouroboros.Network.PeerSelection.Governor
+Ouroboros.Network.PeerSelection.Governor.ActivePeers
+Ouroboros.Network.PeerSelection.Governor.EstablishedPeers
+Ouroboros.Network.PeerSelection.Governor.KnownPeers
+Ouroboros.Network.PeerSelection.Governor.Monitor
+Ouroboros.Network.PeerSelection.Governor.RootPeers
+Ouroboros.Network.PeerSelection.Governor.Types
+Ouroboros.Network.PeerSelection.PeerStateActions
+Ouroboros.Network.Server2

@@ -1,0 +1,74 @@
+Diffusion.P2P.run : Diffusion.P2P.runM
+Diffusion.P2P.runM : PeerSelection.Governor.peerSelectionGovernor PeerSelection.PeerStateActions.withPeerStateActions ConnectionManager.Core.withConnectionManager Server2.run PeerSelection.Governor.peerChurnGovernor InboundGovernor.ControlChannel.newControlChannel
+PeerSelection.Governor.peerSelectionGovernor : PeerSelection.Governor.peerSelectionGovernorLoop PeerSelection.Governor.Types.emptyPeerSelectionState
+PeerSelection.Governor.peerSelectionGovernorLoop : PeerSelection.Governor.ActivePeers.aboveTarget PeerSelection.Governor.ActivePeers.belowTarget PeerSelection.Governor.EstablishedPeers.aboveTarget PeerSelection.Governor.EstablishedPeers.belowTarget PeerSelection.Governor.KnownPeers.aboveTarget PeerSelection.Governor.KnownPeers.belowTarget PeerSelection.Governor.Monitor.localRoots PeerSelection.Governor.Monitor.targetPeers PeerSelection.Governor.RootPeers.belowTarget PeerSelection.Governor.Types.assertPeerSelectionState PeerSelection.Governor.wakeupDecision PeerSelection.Governor.Monitor.connections PeerSelection.Governor.Types.peerStateToCounters
+PeerSelection.Governor.ActivePeers.aboveTarget : PeerSelection.Governor.ActivePeers.aboveTargetLocal PeerSelection.Governor.ActivePeers.aboveTargetOther
+PeerSelection.Governor.ActivePeers.aboveTargetLocal : PeerSelection.Governor.ActivePeers.jobDemoteActivePeer PeerSelection.Governor.Types.pickPeers
+PeerSelection.Governor.ActivePeers.aboveTargetOther : PeerSelection.Governor.ActivePeers.jobDemoteActivePeer PeerSelection.Governor.Types.pickPeers
+PeerSelection.Governor.ActivePeers.belowTarget : PeerSelection.Governor.ActivePeers.belowTargetLocal PeerSelection.Governor.ActivePeers.belowTargetOther
+PeerSelection.Governor.ActivePeers.belowTargetLocal : PeerSelection.Governor.Types.pickPeers PeerSelection.Governor.ActivePeers.jobPromoteWarmPeer
+PeerSelection.Governor.ActivePeers.belowTargetOther : PeerSelection.Governor.Types.pickPeers PeerSelection.Governor.ActivePeers.jobPromoteWarmPeer
+PeerSelection.Governor.EstablishedPeers.aboveTarget : PeerSelection.Governor.Types.pickPeers PeerSelection.Governor.EstablishedPeers.jobDemoteEstablishedPeer
+PeerSelection.Governor.EstablishedPeers.belowTarget : PeerSelection.Governor.EstablishedPeers.belowTargetLocal PeerSelection.Governor.EstablishedPeers.belowTargetOther
+PeerSelection.Governor.EstablishedPeers.belowTargetLocal : PeerSelection.Governor.Types.pickPeers PeerSelection.Governor.EstablishedPeers.jobPromoteColdPeer
+PeerSelection.Governor.EstablishedPeers.belowTargetOther : PeerSelection.Governor.Types.pickPeers PeerSelection.Governor.EstablishedPeers.jobPromoteColdPeer
+PeerSelection.Governor.KnownPeers.aboveTarget : PeerSelection.Governor.Types.pickPeers
+PeerSelection.Governor.KnownPeers.belowTarget : PeerSelection.Governor.Types.pickPeers PeerSelection.Governor.KnownPeers.jobGossip
+PeerSelection.Governor.Monitor.localRoots : PeerSelection.Governor.ActivePeers.jobDemoteActivePeer
+PeerSelection.Governor.Monitor.targetPeers : PeerSelection.Governor.Types.sanePeerSelectionTargets
+PeerSelection.Governor.RootPeers.belowTarget : PeerSelection.Governor.RootPeers.jobReqPublicRootPeers
+PeerSelection.Governor.Types.assertPeerSelectionState : PeerSelection.Governor.Types.sanePeerSelectionTargets
+PeerSelection.Governor.Types.emptyPeerSelectionState : PeerSelection.Governor.Types.nullPeerSelectionTargets
+PeerSelection.PeerStateActions.awaitAllResults : PeerSelection.PeerStateActions.getMiniProtocolsVar
+PeerSelection.PeerStateActions.awaitFirstResult : PeerSelection.PeerStateActions.getMiniProtocolsVar
+PeerSelection.PeerStateActions.startProtocols : PeerSelection.PeerStateActions.getMiniProtocolsVar PeerSelection.PeerStateActions.getProtocols
+PeerSelection.PeerStateActions.withPeerStateActions : PeerSelection.PeerStateActions.awaitAllResults PeerSelection.PeerStateActions.awaitFirstResult PeerSelection.PeerStateActions.startProtocols PeerSelection.PeerStateActions.getMiniProtocolsVar PeerSelection.PeerStateActions.getControlVar PeerSelection.PeerStateActions.mkApplicationHandleBundle ConnectionManager.Types.requestOutboundConnection ConnectionManager.Types.unregisterOutboundConnection
+ConnectionManager.Core.withConnectionManager : ConnectionManager.Types.newEmptyPromiseIO ConnectionManager.Core.connectionManagerStateToCounters ConnectionManager.Core.newFreshIdSupply ConnectionManager.Core.newMutableConnState ConnectionManager.Types.mkTransition InboundGovernor.ControlChannel.newInboundConnection InboundGovernor.ControlChannel.newOutboundConnection
+ConnectionManager.Types.newEmptyPromiseIO : ConnectionManager.Types.newEmptyPromise
+InboundGovernor.inboundGovernor : InboundGovernor.mkRemoteTransitionTrace InboundGovernor.State.inboundGovernorCounters InboundGovernor.State.unregisterConnection InboundGovernor.State.updateMiniProtocol InboundGovernor.State.updateRemoteState ConnectionManager.Types.demotedToColdRemote ConnectionManager.Types.promotedToWarmRemote ConnectionManager.Types.unregisterInboundConnection InboundGovernor.Event.firstMiniProtocolToFinish InboundGovernor.Event.firstMuxToFinish InboundGovernor.Event.firstPeerCommitRemote InboundGovernor.Event.firstPeerDemotedToCold InboundGovernor.Event.firstPeerDemotedToWarm InboundGovernor.Event.firstPeerPromotedToHot InboundGovernor.Event.firstPeerPromotedToWarm InboundGovernor.State.igsConnections
+InboundGovernor.mkRemoteTransitionTrace : InboundGovernor.State.igsConnections
+InboundGovernor.State.inboundGovernorCounters : InboundGovernor.State.igsConnections
+InboundGovernor.State.unregisterConnection : InboundGovernor.State.igsConnections
+InboundGovernor.State.updateMiniProtocol : InboundGovernor.State.igsConnections
+InboundGovernor.State.updateRemoteState : InboundGovernor.State.igsConnections
+Server2.run : InboundGovernor.inboundGovernor ConnectionManager.Types.includeInboundConnection ConnectionManager.Types.numberOfConnections
+PeerSelection.Governor.peerChurnGovernor : 
+InboundGovernor.ControlChannel.newControlChannel : 
+PeerSelection.Governor.wakeupDecision : 
+PeerSelection.Governor.Monitor.connections : 
+PeerSelection.Governor.Types.peerStateToCounters : 
+PeerSelection.Governor.ActivePeers.jobDemoteActivePeer : 
+PeerSelection.Governor.Types.pickPeers : 
+PeerSelection.Governor.ActivePeers.jobPromoteWarmPeer : 
+PeerSelection.Governor.EstablishedPeers.jobDemoteEstablishedPeer : 
+PeerSelection.Governor.EstablishedPeers.jobPromoteColdPeer : 
+PeerSelection.Governor.KnownPeers.jobGossip : 
+PeerSelection.Governor.Types.sanePeerSelectionTargets : 
+PeerSelection.Governor.RootPeers.jobReqPublicRootPeers : 
+PeerSelection.Governor.Types.nullPeerSelectionTargets : 
+PeerSelection.PeerStateActions.getMiniProtocolsVar : 
+PeerSelection.PeerStateActions.getProtocols : 
+PeerSelection.PeerStateActions.getControlVar : 
+PeerSelection.PeerStateActions.mkApplicationHandleBundle : 
+ConnectionManager.Types.requestOutboundConnection : 
+ConnectionManager.Types.unregisterOutboundConnection : 
+ConnectionManager.Core.connectionManagerStateToCounters : 
+ConnectionManager.Core.newFreshIdSupply : 
+ConnectionManager.Core.newMutableConnState : 
+ConnectionManager.Types.mkTransition : 
+InboundGovernor.ControlChannel.newInboundConnection : 
+InboundGovernor.ControlChannel.newOutboundConnection : 
+ConnectionManager.Types.newEmptyPromise : 
+ConnectionManager.Types.demotedToColdRemote : 
+ConnectionManager.Types.promotedToWarmRemote : 
+ConnectionManager.Types.unregisterInboundConnection : 
+InboundGovernor.Event.firstMiniProtocolToFinish : 
+InboundGovernor.Event.firstMuxToFinish : 
+InboundGovernor.Event.firstPeerCommitRemote : 
+InboundGovernor.Event.firstPeerDemotedToCold : 
+InboundGovernor.Event.firstPeerDemotedToWarm : 
+InboundGovernor.Event.firstPeerPromotedToHot : 
+InboundGovernor.Event.firstPeerPromotedToWarm : 
+InboundGovernor.State.igsConnections : 
+ConnectionManager.Types.includeInboundConnection : 
+ConnectionManager.Types.numberOfConnections : 
