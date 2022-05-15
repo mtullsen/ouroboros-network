@@ -1,0 +1,9 @@
+Ouroboros.Network.Diffusion.P2P
+Ouroboros.Network.Server2                    
+Ouroboros.Network.ConnectionManager.Core     
+Ouroboros.Network.PeerSelection.Simple       
+Ouroboros.Network.PeerSelection.PeerStateActions
+Ouroboros.Network.PeerSelection.Governor  
+Ouroboros.Network.InboundGovernor         
+Ouroboros.Network.ConnectionHandler   
+Ouroboros.Network.NodeToNode              
