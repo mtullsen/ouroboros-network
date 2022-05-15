@@ -8,7 +8,7 @@
 {-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications    #-}
+
 
 -- `withLocalSocket` has some constraints that are only required on Windows.
 {-# OPTIONS_GHC -Wno-redundant-constraints #-}
@@ -448,6 +448,7 @@ type NodeToNodePeerSelectionActions (mode :: MuxMode) ntnAddr m a =
       (NodeToNodePeerConnectionHandle mode ntnAddr m a)
       m
 
+
 data Interfaces ntnFd ntnAddr ntnVersion ntnVersionData
                 ntcFd ntcAddr ntcVersion ntcVersionData
                 resolver resolverError
@@ -740,7 +741,7 @@ runM Interfaces
                             serverControlChannel        = localControlChannel,
                             serverObservableStateVar    = localServerStateVar
                           }) Async.wait
-                      
+
     --
     -- remote connection manager
     --
@@ -780,8 +781,8 @@ runM Interfaces
               -- it to the configured value after a delay.
               targetNumberOfActivePeers =
                 min 2 (targetNumberOfActivePeers daPeerSelectionTargets)
-            }   
-    
+            }
+
           withLedgerPeers
             ledgerPeersRng
             diNtnToPeerAddr
@@ -817,7 +818,7 @@ runM Interfaces
                                 -- advise which connections to prune.  It's also not
                                 -- expected that the governor targets will be larger
                                 -- than limits imposed by 'cmConnectionsLimits'.
-                            
+
                           cmConnectionsLimits   = daAcceptedConnectionsLimit,
                           cmTimeWaitTimeout     = daTimeWaitTimeout,
                           cmOutboundIdleTimeout = daProtocolIdleTimeout
@@ -963,7 +964,7 @@ runM Interfaces
                              InitiatorResponderMode ntnFd ntnAddr ntnVersion m ()
                      ) -> do
                   diInstallSigUSR1Handler connectionManager
-                  
+
                   --
                   -- peer state actions
                   --
@@ -1318,3 +1319,4 @@ withLocalSocket tracer getFileDescriptor sn localAddress k =
 
       -- pre-configured systemd socket
       Left sd -> k sd
+

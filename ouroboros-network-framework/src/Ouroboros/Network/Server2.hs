@@ -3,12 +3,12 @@
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE GADTs               #-}
 {-# LANGUAGE KindSignatures      #-}
-{-# LANGUAGE LambdaCase          #-}
+
 {-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TupleSections       #-}
-{-# LANGUAGE TypeApplications    #-}
+
+
 {-# LANGUAGE TypeOperators       #-}
 
 -- 'runResponder' is using a redundant constraint.
@@ -280,3 +280,4 @@ data ServerTrace peerAddr
     -- handed to inbound connection manager, e.g. after handshake negotiation.
       -- MT: this documentation doesn't match the use of this at line 173.
   deriving Show
+

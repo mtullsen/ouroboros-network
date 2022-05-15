@@ -1,8 +1,8 @@
 {-# LANGUAGE BangPatterns        #-}
-{-# LANGUAGE DeriveFunctor       #-}
+
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE NamedFieldPuns      #-}
-{-# LANGUAGE RecordWildCards     #-}
+
 {-# LANGUAGE ScopedTypeVariables #-}
 
 

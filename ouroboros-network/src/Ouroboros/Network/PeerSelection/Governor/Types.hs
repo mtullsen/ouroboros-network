@@ -224,7 +224,7 @@ data PeerStateActions peeraddr peerconn m = PeerStateActions {
     --
     closePeerConnection      :: peerconn -> m ()
   }
-  -- MT: Nothing keeping users from using wrong 'peerconn's:  Might write more co-inductively/FuMa.?
+  -- MT: Anthin keeping users from using wrong 'peerconn's?  Might write more co-inductively/FuMa.?
   
 -----------------------
 -- Peer Selection State

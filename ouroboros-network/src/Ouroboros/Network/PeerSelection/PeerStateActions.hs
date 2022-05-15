@@ -5,7 +5,7 @@
 {-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE StandaloneDeriving  #-}
+
 {-# LANGUAGE TupleSections       #-}
 
 -- 'startProtocols' is using 'HasInitiator' constraint to limit pattern
@@ -410,7 +410,7 @@ data PeerState
   -- ^ 'DemotingToCold' also contains the initial state of the peer.
      -- GR-FIXME[D]: not seeing this to be the case
   deriving Eq
-  
+
 
 -- | Return the current state of the peer, as it should be viewed by the
 -- governor.
@@ -434,7 +434,7 @@ data PeerConnectionHandle (muxMode :: MuxMode) peerAddr bytes m a b = PeerConnec
     pchMux          :: Mux.Mux muxMode m,
     pchAppHandles   :: Bundle (ApplicationHandle muxMode bytes m a b)
   }
-  
+
 instance Show peerAddr
       => Show (PeerConnectionHandle muxMode peerAddr bytes m a b) where
     show PeerConnectionHandle { pchConnectionId } =
@@ -557,7 +557,7 @@ withPeerStateActions PeerStateActionsArguments {
                        spsTracer=_spsTracer,  -- MT-TEMP
                        spsConnectionManager
                      }
-                     k = do
+                     k =
     JobPool.withJobPool $ \jobPool ->
       k PeerStateActions {
           establishPeerConnection = establishPeerConnection jobPool,
@@ -570,7 +570,7 @@ withPeerStateActions PeerStateActionsArguments {
   where
 
     spsTracer = contramap show debugTracer -- MT-TEMP: spit out tracing to stderr
-    
+
     -- Update PeerState with the new state only if the current state isn't
     -- cold. Returns True if the state wasn't PeerCold
     updateUnlessCold :: StrictTVar m PeerState -> PeerState -> STM m Bool
@@ -599,7 +599,7 @@ withPeerStateActions PeerStateActionsArguments {
             (WithSomeProtocolTemperature . WithHot
               <$> awaitFirstResult TokHot pchAppHandles)
            -- MT-TEMP: Aha: on the bundle, all temps.
-            
+
         traceWith spsTracer (PeerMonitoringResult pchConnectionId r)
         case r of
           --
@@ -710,14 +710,14 @@ withPeerStateActions PeerStateActionsArguments {
               JobPool.forkJob jobPool
                               (Job (handleJust
                                      (\e -> case fromException e of
-                                        Just SomeAsyncException {} -> Nothing
+                                        Just SomeAsyncException {} -> Nothing -- MT: thk
                                         Nothing                    -> Just e)
                                      (\e -> do
                                         traceWith spsTracer (PeerMonitoringError connectionId e)
                                         throwIO e)
                                      (peerMonitoringLoop connHandle $> Nothing))
                                    (return . Just)
-                                   ()  -- MT-TEMP: the group identifier
+                                   ()  -- unit group, not using JobPool to group jobs.
                                    ("peerMonitoringLoop " ++ show remoteAddress))
               pure connHandle
 
@@ -1011,7 +1011,7 @@ startProtocols tok PeerConnectionHandle { pchMux, pchAppHandles } = do
                       miniProtocolNum,
                       miniProtocolRun
                     } = do
-      
+
       case miniProtocolRun of
         InitiatorProtocolOnly initiator ->
             Mux.runMiniProtocol
@@ -1025,7 +1025,7 @@ startProtocols tok PeerConnectionHandle { pchMux, pchAppHandles } = do
               Mux.InitiatorDirection
               Mux.StartEagerly
               (runMuxPeer initiator . fromChannel)
-          
+
 --
 -- Trace
 --
