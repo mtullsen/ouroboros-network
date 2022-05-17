@@ -762,7 +762,7 @@ runM Interfaces
                 InitiatorAndResponderDiffusionMode ->
                   -- we pass 'Server.newOutboundConnection serverControlChannel' to
                   -- connection handler
-                  -- [MT: re this comment: huh? feels out of context. DEI?]
+                  -- GR-FIXME: last comment? not understandable in context. DEI?
                   HasInitiatorResponder <$>
                     (CMDInInitiatorResponderMode
                       <$> Server.newControlChannel
@@ -1070,7 +1070,6 @@ runM Interfaces
     (fuzzRng,        rng4) = split rng3
     (ntnInbgovRng,   ntcInbgovRng) = split rng4
 
-    -- MT-TODO: verify following.
     -- Only the 'IOManagerError's are fatal, all the other exceptions in the
     -- networking code will only shutdown the bearer (see 'ShutdownPeer' why
     -- this is so).
@@ -1215,7 +1214,7 @@ localDataFlow :: ntcVersion
 localDataFlow _ _ = Unidirectional
 
 
--- MT: might these next two be split out of this long module?
+-- GR:FIXME[C]: might the following functions be moved out of module?
 
 --
 -- Socket utility functions

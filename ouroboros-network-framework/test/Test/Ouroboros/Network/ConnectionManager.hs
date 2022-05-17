@@ -751,7 +751,7 @@ prop_valid_transitions (SkewedBool bindToLocalAddress) scheduleMap =
           ConnectionManagerArguments {
               cmTracer,
               cmTrTracer,
-              cmMuxTracer = nullTracer, --MT: TODO: figure how to change.
+              cmMuxTracer = nullTracer,
               cmIPv4Address = myAddress,
               cmIPv6Address = Nothing,
               cmAddressType = \_ -> Just IPv4Address,

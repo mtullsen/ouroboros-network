@@ -93,7 +93,7 @@ inboundGovernor :: forall (muxMode :: MuxMode) socket peerAddr versionNumber m a
                    , MonadTime     m
                    , MonadTimer    m
                    , MonadMask     m
-                   , Ord peerAddr              -- MT: ~odd
+                   , Ord peerAddr
                    , HasResponder muxMode ~ True
                    )
                 => Tracer m (RemoteTransitionTrace peerAddr)

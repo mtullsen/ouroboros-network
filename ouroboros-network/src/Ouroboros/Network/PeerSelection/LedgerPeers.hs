@@ -226,7 +226,7 @@ ledgerPeersThread inRng toPeerAddr tracer readUseLedgerAfter LedgerPeersConsensu
         let peerListLifeTime = if Map.null peerMap && isLedgerPeersEnabled useLedgerAfter
                                   then 30
                                   else 1847 -- Close to but not exactly 30min.
-                                  -- MT: magic numbers!
+                                  -- GR-FIXME[R2]: move magic numbers to ...?
 
         traceWith tracer WaitingOnRequest
         numRequested <- atomically getReq

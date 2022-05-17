@@ -113,7 +113,7 @@ import           Ouroboros.Network.ConnectionManager.Types
 -- mini-protocols either terminates or errors.  When a mini-protocol terminates
 -- 
 --    * if (mini-protocol was hot): trigger a synchronous /hot → warm/ transition.
---    * otherwise: close the connection.  [MT-TODO: haddock good?]
+--    * otherwise: close the connection.
 --  
 -- The monitoring loop is supposed to stop when the multiplexer stops.
 --
@@ -595,7 +595,6 @@ withPeerStateActions PeerStateActionsArguments {
           `orElse`
             (WithSomeProtocolTemperature . WithHot
               <$> awaitFirstResult TokHot pchAppHandles)
-           -- MT-TEMP: Aha: on the bundle, all temps.
 
         traceWith spsTracer (PeerMonitoringResult pchConnectionId r)
         case r of
@@ -707,7 +706,7 @@ withPeerStateActions PeerStateActionsArguments {
               JobPool.forkJob jobPool
                               (Job (handleJust
                                      (\e -> case fromException e of
-                                        Just SomeAsyncException {} -> Nothing -- MT: thk
+                                        Just SomeAsyncException {} -> Nothing
                                         Nothing                    -> Just e)
                                      (\e -> do
                                         traceWith spsTracer (PeerMonitoringError connectionId e)

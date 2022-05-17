@@ -2,7 +2,6 @@
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE GADTs               #-}
 {-# LANGUAGE KindSignatures      #-}
-
 {-# LANGUAGE ScopedTypeVariables #-}
 
 
@@ -60,7 +59,7 @@ instance Show peerAddr
 -- of these messages; there are two producers: accept loop and connection
 -- handler for outbound connections.
 --
--- MT: last sentence is DOU.
+-- GR-FIXME[D2]: Last sentence is DOU (see code-review-doc)
 type ServerControlChannel (muxMode :: MuxMode) peerAddr bytes m a b =
     ControlChannel m (NewConnection peerAddr (Handle muxMode peerAddr bytes m a b))
 
@@ -85,7 +84,7 @@ newControlChannel :: forall m srvCntrlMsg.
 newControlChannel = do
     -- Queue size: events will come either from the accept loop or from the
     -- connection manager (when it includes an outbound duplex connection).
-    -- MT: above is DOU.
+    -- GR-FIXME[D2]: above comment is DOU (see code-review-doc)
     channel <-
       atomically $
         newTBQueue 10                             -- G-FIXME[R]: magic number
@@ -116,4 +115,5 @@ newInboundConnection channel connId dataFlow handle =
     writeMessage channel
                  (NewConnection Inbound connId dataFlow handle)
 
--- MT: Suggestion: inline the last two, each called just 1x in *.ConnectionManager.Core
+-- GR-FIXME[C3]: Possibly inline the last two at their call sites, each
+--  is just called 1 time in ....ConnectionManager.Core

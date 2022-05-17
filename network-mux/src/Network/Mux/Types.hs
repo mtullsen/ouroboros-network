@@ -87,8 +87,8 @@ newtype MiniProtocolLimits =
        --
        maximumIngressQueue :: Int
      }
-  -- MT: if part of wire format, should this be a fixed width, E.g., Word16?
-  -- MT: revert this back to data with !  ? Because we plan to extend this type?
+  -- GR-FIXME: Q. if part of wire format, shouldn't this be a fixed width, E.g.,
+  -- Word16?
 
 -- $interface
 --

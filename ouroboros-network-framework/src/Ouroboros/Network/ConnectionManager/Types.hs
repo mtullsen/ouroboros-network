@@ -80,8 +80,8 @@
 -- this haddock, see associated specification.
 --
 
--- MT: references to PeerStateActions and P2P Governor feel misplaced as these
--- are defined in a calling package!
+-- GR-FIXME[D]: references to PeerStateActions and P2P Governor feel misplaced
+-- as these are defined in a calling package! (DOU)
 
 module Ouroboros.Network.ConnectionManager.Types
   ( -- * Connection manager core types
@@ -816,7 +816,6 @@ data AssertionLocation peerAddr
   | PromotedToWarmRemote         !(Maybe (ConnectionId peerAddr)) !AbstractState
   | DemotedToColdRemote          !(Maybe (ConnectionId peerAddr)) !AbstractState
   deriving Show
-  -- MT: odd datatype
 
 -- | 'ConnectionManagerTrace' contains a hole for a trace of single connection
 -- which is filled with 'ConnectionHandlerTrace'.

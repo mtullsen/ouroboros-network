@@ -25,7 +25,8 @@ import           Control.Monad.Class.MonadFork (MonadThread (..))
 import           Control.Monad.Class.MonadSTM
 import           Control.Monad.Class.MonadThrow
 
--- MT: some documentation as to the purpose/use of module?
+-- | This module allows the management of a multiple Async jobs which
+-- are grouped by an 'Ord group => group' type.
 
 data JobPool group m a = JobPool {
        jobsVar         :: !(TVar m (Map (group, ThreadId m) (Async m ()))),
@@ -102,7 +103,7 @@ collect :: MonadSTM m => JobPool group m a -> STM m a
 collect JobPool{completionQueue} = readTQueue completionQueue
   -- GR-FIXME[C2]: better name?
   --  - 'collect' gives the impression getting many and NOT blocking
-  --  - how about 'getCompletedJob'
+  --  - how about 'getCompletedJob'?
   
 cancelGroup :: ( MonadAsync m
                , Eq group
