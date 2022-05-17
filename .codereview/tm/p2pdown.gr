@@ -1,0 +1,96 @@
+Ouroboros.Network.AnchoredFragment : Ouroboros.Network.AnchoredSeq Ouroboros.Network.Block Ouroboros.Network.Point
+Ouroboros.Network.AnchoredSeq : 
+Ouroboros.Network.Block : Ouroboros.Network.Point Ouroboros.Network.Util.ShowProxy
+Ouroboros.Network.BlockFetch : Ouroboros.Network.AnchoredFragment Ouroboros.Network.Block Ouroboros.Network.BlockFetch.ClientRegistry Ouroboros.Network.BlockFetch.ClientState Ouroboros.Network.BlockFetch.State Ouroboros.Network.DeltaQ
+Ouroboros.Network.BlockFetch.Client : Ouroboros.Network.AnchoredFragment Ouroboros.Network.Block Ouroboros.Network.BlockFetch.ClientState Ouroboros.Network.BlockFetch.DeltaQ Ouroboros.Network.NodeToNode.Version Ouroboros.Network.PeerSelection.PeerMetric.Type Ouroboros.Network.Protocol.BlockFetch.Type Ouroboros.Network.Mux
+Ouroboros.Network.BlockFetch.ClientRegistry : Ouroboros.Network.BlockFetch.ClientState Ouroboros.Network.DeltaQ Ouroboros.Network.NodeToNode.Version
+Ouroboros.Network.BlockFetch.ClientState : Ouroboros.Network.AnchoredFragment Ouroboros.Network.Block Ouroboros.Network.BlockFetch.DeltaQ Ouroboros.Network.Point Ouroboros.Network.Protocol.BlockFetch.Type Ouroboros.Network.Mux
+Ouroboros.Network.BlockFetch.Decision : Ouroboros.Network.AnchoredFragment Ouroboros.Network.Block Ouroboros.Network.BlockFetch.ClientState Ouroboros.Network.BlockFetch.DeltaQ Ouroboros.Network.Point
+Ouroboros.Network.BlockFetch.DeltaQ : Ouroboros.Network.DeltaQ
+Ouroboros.Network.BlockFetch.State : Ouroboros.Network.AnchoredFragment Ouroboros.Network.Block Ouroboros.Network.BlockFetch.ClientState Ouroboros.Network.BlockFetch.Decision Ouroboros.Network.BlockFetch.DeltaQ
+Ouroboros.Network.DeltaQ : 
+Ouroboros.Network.Diffusion.Common : Ouroboros.Network.NodeToClient Ouroboros.Network.NodeToNode Ouroboros.Network.PeerSelection.LedgerPeers Ouroboros.Network.Mux Ouroboros.Network.Snocket
+Ouroboros.Network.Diffusion.P2P : Ouroboros.Network.BlockFetch Ouroboros.Network.Diffusion.Common Ouroboros.Network.Diffusion.Policies Ouroboros.Network.NodeToClient Ouroboros.Network.NodeToNode Ouroboros.Network.PeerSelection.Governor Ouroboros.Network.PeerSelection.Governor.Types Ouroboros.Network.PeerSelection.LedgerPeers Ouroboros.Network.PeerSelection.PeerMetric Ouroboros.Network.PeerSelection.PeerStateActions Ouroboros.Network.PeerSelection.RootPeersDNS Ouroboros.Network.PeerSelection.Simple Ouroboros.Network.ConnectionHandler Ouroboros.Network.ConnectionId Ouroboros.Network.ConnectionManager.Core Ouroboros.Network.ConnectionManager.Types Ouroboros.Network.IOManager Ouroboros.Network.InboundGovernor Ouroboros.Network.Mux Ouroboros.Network.MuxMode Ouroboros.Network.Protocol.Handshake Ouroboros.Network.Protocol.Handshake.Codec Ouroboros.Network.Protocol.Handshake.Version Ouroboros.Network.RethrowPolicy Ouroboros.Network.Server2 Ouroboros.Network.Snocket
+Ouroboros.Network.Diffusion.Policies : Ouroboros.Network.PeerSelection.Governor.Types Ouroboros.Network.PeerSelection.PeerMetric Ouroboros.Network.ConnectionManager.Types Ouroboros.Network.InboundGovernor
+Ouroboros.Network.Magic : 
+Ouroboros.Network.NodeToClient : Ouroboros.Network.NodeToClient.Version Ouroboros.Network.Protocol.ChainSync.Client Ouroboros.Network.Protocol.ChainSync.Type Ouroboros.Network.Protocol.LocalStateQuery.Client Ouroboros.Network.Protocol.LocalStateQuery.Type Ouroboros.Network.Protocol.LocalTxMonitor.Client Ouroboros.Network.Protocol.LocalTxMonitor.Type Ouroboros.Network.Protocol.LocalTxSubmission.Client Ouroboros.Network.Protocol.LocalTxSubmission.Type Ouroboros.Network.Tracers Ouroboros.Network.Driver Ouroboros.Network.Driver.Limits Ouroboros.Network.Driver.Simple Ouroboros.Network.ErrorPolicy Ouroboros.Network.IOManager Ouroboros.Network.Mux Ouroboros.Network.Protocol.Handshake.Codec Ouroboros.Network.Protocol.Handshake.Type Ouroboros.Network.Protocol.Handshake.Version Ouroboros.Network.Snocket Ouroboros.Network.Socket Ouroboros.Network.Subscription.Client Ouroboros.Network.Subscription.Ip Ouroboros.Network.Subscription.Worker
+Ouroboros.Network.NodeToClient.Version : Ouroboros.Network.Magic Ouroboros.Network.CodecCBORTerm Ouroboros.Network.Protocol.Handshake.Version
+Ouroboros.Network.NodeToNode : Ouroboros.Network.BlockFetch.Client Ouroboros.Network.NodeToNode.Version Ouroboros.Network.PeerSelection.Governor.Types Ouroboros.Network.PeerSelection.RootPeersDNS Ouroboros.Network.PeerSelection.Types Ouroboros.Network.Tracers Ouroboros.Network.TxSubmission.Inbound Ouroboros.Network.TxSubmission.Outbound Ouroboros.Network.Driver Ouroboros.Network.Driver.Limits Ouroboros.Network.Driver.Simple Ouroboros.Network.ErrorPolicy Ouroboros.Network.IOManager Ouroboros.Network.Mux Ouroboros.Network.Protocol.Handshake.Codec Ouroboros.Network.Protocol.Handshake.Type Ouroboros.Network.Protocol.Handshake.Version Ouroboros.Network.Snocket Ouroboros.Network.Socket Ouroboros.Network.Subscription.Dns Ouroboros.Network.Subscription.Ip Ouroboros.Network.Subscription.Worker
+Ouroboros.Network.NodeToNode.Version : Ouroboros.Network.Magic Ouroboros.Network.CodecCBORTerm Ouroboros.Network.Protocol.Handshake.Version
+Ouroboros.Network.PeerSelection.EstablishedPeers : 
+Ouroboros.Network.PeerSelection.Governor : Ouroboros.Network.BlockFetch Ouroboros.Network.Diffusion.Policies Ouroboros.Network.PeerSelection.EstablishedPeers Ouroboros.Network.PeerSelection.Governor.ActivePeers Ouroboros.Network.PeerSelection.Governor.EstablishedPeers Ouroboros.Network.PeerSelection.Governor.KnownPeers Ouroboros.Network.PeerSelection.Governor.Monitor Ouroboros.Network.PeerSelection.Governor.RootPeers Ouroboros.Network.PeerSelection.Governor.Types Ouroboros.Network.PeerSelection.KnownPeers Ouroboros.Network.PeerSelection.PeerMetric Data.Cache
+Ouroboros.Network.PeerSelection.Governor.ActivePeers : Ouroboros.Network.PeerSelection.EstablishedPeers Ouroboros.Network.PeerSelection.Governor.Types Ouroboros.Network.PeerSelection.KnownPeers Ouroboros.Network.PeerSelection.LocalRootPeers
+Ouroboros.Network.PeerSelection.Governor.EstablishedPeers : Ouroboros.Network.PeerSelection.EstablishedPeers Ouroboros.Network.PeerSelection.Governor.Types Ouroboros.Network.PeerSelection.KnownPeers Ouroboros.Network.PeerSelection.LocalRootPeers
+Ouroboros.Network.PeerSelection.Governor.KnownPeers : Ouroboros.Network.PeerSelection.EstablishedPeers Ouroboros.Network.PeerSelection.Governor.Types Ouroboros.Network.PeerSelection.KnownPeers Ouroboros.Network.PeerSelection.LocalRootPeers
+Ouroboros.Network.PeerSelection.Governor.Monitor : Ouroboros.Network.PeerSelection.EstablishedPeers Ouroboros.Network.PeerSelection.Governor.ActivePeers Ouroboros.Network.PeerSelection.Governor.Types Ouroboros.Network.PeerSelection.KnownPeers Ouroboros.Network.PeerSelection.LocalRootPeers Ouroboros.Network.PeerSelection.Types
+Ouroboros.Network.PeerSelection.Governor.RootPeers : Ouroboros.Network.PeerSelection.Governor.Types Ouroboros.Network.PeerSelection.KnownPeers Ouroboros.Network.PeerSelection.LocalRootPeers
+Ouroboros.Network.PeerSelection.Governor.Types : Ouroboros.Network.PeerSelection.EstablishedPeers Ouroboros.Network.PeerSelection.KnownPeers Ouroboros.Network.PeerSelection.LocalRootPeers Ouroboros.Network.PeerSelection.Types Data.Cache
+Ouroboros.Network.PeerSelection.KnownPeers : 
+Ouroboros.Network.PeerSelection.LedgerPeers : Ouroboros.Network.PeerSelection.RootPeersDNS
+Ouroboros.Network.PeerSelection.LocalRootPeers : Ouroboros.Network.PeerSelection.Types
+Ouroboros.Network.PeerSelection.PeerMetric : Ouroboros.Network.DeltaQ Ouroboros.Network.NodeToNode Ouroboros.Network.PeerSelection.PeerMetric.Type
+Ouroboros.Network.PeerSelection.PeerMetric.Type : Ouroboros.Network.DeltaQ
+Ouroboros.Network.PeerSelection.PeerStateActions : Ouroboros.Network.PeerSelection.Governor Ouroboros.Network.PeerSelection.Types Ouroboros.Network.Channel Ouroboros.Network.ConnectionHandler Ouroboros.Network.ConnectionId Ouroboros.Network.ConnectionManager.Types Ouroboros.Network.Mux Ouroboros.Network.Protocol.Handshake
+Ouroboros.Network.PeerSelection.RelayAccessPoint : 
+Ouroboros.Network.PeerSelection.RootPeersDNS : Ouroboros.Network.PeerSelection.RelayAccessPoint Ouroboros.Network.PeerSelection.RootPeersDNS.DNSActions Ouroboros.Network.PeerSelection.Types
+Ouroboros.Network.PeerSelection.RootPeersDNS.DNSActions : 
+Ouroboros.Network.PeerSelection.Simple : Ouroboros.Network.PeerSelection.Governor.Types Ouroboros.Network.PeerSelection.LedgerPeers Ouroboros.Network.PeerSelection.RootPeersDNS Ouroboros.Network.PeerSelection.Types
+Ouroboros.Network.PeerSelection.Types : 
+Ouroboros.Network.Point : 
+Ouroboros.Network.Protocol.BlockFetch.Type : Ouroboros.Network.Util.ShowProxy
+Ouroboros.Network.Protocol.ChainSync.Client : Ouroboros.Network.Protocol.ChainSync.Type
+Ouroboros.Network.Protocol.ChainSync.Type : Ouroboros.Network.Util.ShowProxy
+Ouroboros.Network.Protocol.LocalStateQuery.Client : Ouroboros.Network.Protocol.LocalStateQuery.Codec Ouroboros.Network.Protocol.LocalStateQuery.Type
+Ouroboros.Network.Protocol.LocalStateQuery.Codec : Ouroboros.Network.Protocol.LocalStateQuery.Type
+Ouroboros.Network.Protocol.LocalStateQuery.Type : Ouroboros.Network.Util.ShowProxy
+Ouroboros.Network.Protocol.LocalTxMonitor.Client : Ouroboros.Network.Protocol.LocalTxMonitor.Type
+Ouroboros.Network.Protocol.LocalTxMonitor.Type : Ouroboros.Network.Util.ShowProxy
+Ouroboros.Network.Protocol.LocalTxSubmission.Client : Ouroboros.Network.Protocol.LocalTxSubmission.Type
+Ouroboros.Network.Protocol.LocalTxSubmission.Type : Ouroboros.Network.Util.ShowProxy
+Ouroboros.Network.Protocol.TxSubmission2.Client : Ouroboros.Network.Protocol.TxSubmission2.Type
+Ouroboros.Network.Protocol.TxSubmission2.Server : Ouroboros.Network.Protocol.TxSubmission2.Type
+Ouroboros.Network.Protocol.TxSubmission2.Type : Ouroboros.Network.Util.ShowProxy
+Ouroboros.Network.Tracers : Ouroboros.Network.Driver Ouroboros.Network.ErrorPolicy Ouroboros.Network.Protocol.Handshake.Type Ouroboros.Network.Socket Ouroboros.Network.Subscription.Dns Ouroboros.Network.Subscription.Ip
+Ouroboros.Network.TxSubmission.Inbound : Ouroboros.Network.NodeToNode.Version Ouroboros.Network.Protocol.TxSubmission2.Server Ouroboros.Network.TxSubmission.Mempool.Reader
+Ouroboros.Network.TxSubmission.Mempool.Reader : Ouroboros.Network.Protocol.TxSubmission2.Client
+Ouroboros.Network.TxSubmission.Outbound : Ouroboros.Network.NodeToNode.Version Ouroboros.Network.Protocol.TxSubmission2.Client Ouroboros.Network.TxSubmission.Mempool.Reader Ouroboros.Network.Mux
+Data.Cache : 
+Data.Wedge : 
+Ouroboros.Network.Channel : 
+Ouroboros.Network.CodecCBORTerm : 
+Ouroboros.Network.ConnectionHandler : Ouroboros.Network.ConnectionId Ouroboros.Network.ConnectionManager.Types Ouroboros.Network.Mux Ouroboros.Network.MuxMode Ouroboros.Network.Protocol.Handshake Ouroboros.Network.RethrowPolicy
+Ouroboros.Network.ConnectionId : 
+Ouroboros.Network.ConnectionManager.Core : Data.Wedge Ouroboros.Network.ConnectionId Ouroboros.Network.ConnectionManager.Types Ouroboros.Network.InboundGovernor.ControlChannel Ouroboros.Network.MuxMode Ouroboros.Network.Server.RateLimiting Ouroboros.Network.Snocket
+Ouroboros.Network.ConnectionManager.Types : Ouroboros.Network.ConnectionId Ouroboros.Network.MuxMode
+Ouroboros.Network.Driver : Ouroboros.Network.Driver.Limits Ouroboros.Network.Driver.Simple
+Ouroboros.Network.Driver.Limits : Ouroboros.Network.Channel Ouroboros.Network.Driver.Simple Ouroboros.Network.Util.ShowProxy
+Ouroboros.Network.Driver.Simple : Ouroboros.Network.Channel Ouroboros.Network.Util.ShowProxy
+Ouroboros.Network.ErrorPolicy : Ouroboros.Network.Subscription.PeerState
+Ouroboros.Network.IOManager : 
+Ouroboros.Network.InboundGovernor : Data.Cache Ouroboros.Network.Channel Ouroboros.Network.ConnectionHandler Ouroboros.Network.ConnectionId Ouroboros.Network.ConnectionManager.Types Ouroboros.Network.InboundGovernor.ControlChannel Ouroboros.Network.InboundGovernor.Event Ouroboros.Network.InboundGovernor.State Ouroboros.Network.Mux Ouroboros.Network.Server.RateLimiting
+Ouroboros.Network.InboundGovernor.ControlChannel : Ouroboros.Network.ConnectionHandler Ouroboros.Network.ConnectionId Ouroboros.Network.ConnectionManager.Types
+Ouroboros.Network.InboundGovernor.Event : Ouroboros.Network.ConnectionHandler Ouroboros.Network.ConnectionId Ouroboros.Network.ConnectionManager.Types Ouroboros.Network.InboundGovernor.ControlChannel Ouroboros.Network.InboundGovernor.State Ouroboros.Network.Mux
+Ouroboros.Network.InboundGovernor.State : Data.Cache Ouroboros.Network.ConnectionId Ouroboros.Network.ConnectionManager.Types Ouroboros.Network.Mux
+Ouroboros.Network.Mux : Ouroboros.Network.Channel Ouroboros.Network.ConnectionId Ouroboros.Network.Driver Ouroboros.Network.Util.ShowProxy
+Ouroboros.Network.MuxMode : 
+Ouroboros.Network.Protocol.Handshake : Ouroboros.Network.Channel Ouroboros.Network.Driver.Limits Ouroboros.Network.Protocol.Handshake.Client Ouroboros.Network.Protocol.Handshake.Codec Ouroboros.Network.Protocol.Handshake.Server Ouroboros.Network.Protocol.Handshake.Type Ouroboros.Network.Protocol.Handshake.Version
+Ouroboros.Network.Protocol.Handshake.Client : Ouroboros.Network.Protocol.Handshake.Codec Ouroboros.Network.Protocol.Handshake.Type Ouroboros.Network.Protocol.Handshake.Version
+Ouroboros.Network.Protocol.Handshake.Codec : Ouroboros.Network.CodecCBORTerm Ouroboros.Network.Driver.Limits Ouroboros.Network.Protocol.Handshake.Type Ouroboros.Network.Protocol.Limits
+Ouroboros.Network.Protocol.Handshake.Server : Ouroboros.Network.Protocol.Handshake.Client Ouroboros.Network.Protocol.Handshake.Codec Ouroboros.Network.Protocol.Handshake.Type Ouroboros.Network.Protocol.Handshake.Version
+Ouroboros.Network.Protocol.Handshake.Type : Ouroboros.Network.Util.ShowProxy
+Ouroboros.Network.Protocol.Handshake.Version : 
+Ouroboros.Network.Protocol.Limits : 
+Ouroboros.Network.RethrowPolicy : 
+Ouroboros.Network.Server.ConnectionTable : 
+Ouroboros.Network.Server.RateLimiting : 
+Ouroboros.Network.Server.Socket : Ouroboros.Network.ErrorPolicy Ouroboros.Network.Server.RateLimiting
+Ouroboros.Network.Server2 : Ouroboros.Network.ConnectionHandler Ouroboros.Network.ConnectionManager.Types Ouroboros.Network.InboundGovernor Ouroboros.Network.InboundGovernor.ControlChannel Ouroboros.Network.Mux Ouroboros.Network.Server.RateLimiting Ouroboros.Network.Snocket
+Ouroboros.Network.Snocket : Ouroboros.Network.IOManager
+Ouroboros.Network.Socket : Ouroboros.Network.ConnectionId Ouroboros.Network.Driver.Limits Ouroboros.Network.ErrorPolicy Ouroboros.Network.IOManager Ouroboros.Network.Mux Ouroboros.Network.Protocol.Handshake Ouroboros.Network.Protocol.Handshake.Codec Ouroboros.Network.Protocol.Handshake.Type Ouroboros.Network.Server.ConnectionTable Ouroboros.Network.Server.Socket Ouroboros.Network.Snocket Ouroboros.Network.Subscription.PeerState
+Ouroboros.Network.Subscription.Client : Ouroboros.Network.ErrorPolicy Ouroboros.Network.Snocket Ouroboros.Network.Socket Ouroboros.Network.Subscription.Ip Ouroboros.Network.Subscription.Subscriber Ouroboros.Network.Subscription.Worker
+Ouroboros.Network.Subscription.Dns : Ouroboros.Network.ErrorPolicy Ouroboros.Network.Snocket Ouroboros.Network.Socket Ouroboros.Network.Subscription.Ip Ouroboros.Network.Subscription.Subscriber Ouroboros.Network.Subscription.Worker
+Ouroboros.Network.Subscription.Ip : Ouroboros.Network.ErrorPolicy Ouroboros.Network.Snocket Ouroboros.Network.Socket Ouroboros.Network.Subscription.PeerState Ouroboros.Network.Subscription.Subscriber Ouroboros.Network.Subscription.Worker
+Ouroboros.Network.Subscription.PeerState : 
+Ouroboros.Network.Subscription.Subscriber : 
+Ouroboros.Network.Subscription.Worker : Ouroboros.Network.ErrorPolicy Ouroboros.Network.Server.ConnectionTable Ouroboros.Network.Snocket Ouroboros.Network.Subscription.Subscriber
+Ouroboros.Network.Util.ShowProxy : 

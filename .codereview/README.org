@@ -1,0 +1,16 @@
+* NOTE naming conventions, directories:
+
+Temporary directories for modules, funcs, etc:
+  tm/ -- module graphs
+  tf/ -- function graphs
+  te/ -- etc
+  
+Naming conventions
+
+- .gz        :: graphvis/dot format
+- .gr        :: graph (in graphtool format)
+- .ns        :: list of nodes in graph (graphtool format)
+- .es        :: list of edges in graph (graphtool format)
+- .display   :: the "graphtool display" form
+- .filenames :: corresponding filenames for a '.ns'
+
