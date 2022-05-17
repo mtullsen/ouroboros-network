@@ -73,8 +73,6 @@ import           TestLib.InboundGovernor
                      (verifyRemoteTransition, verifyRemoteTransitionOrder,
                      remoteStrIsFinalTransition)
 
-import qualified Debug.Trace -- MT
-
 tests :: TestTree
 tests = 
   testGroup "Ouroboros.Network.Testnet"

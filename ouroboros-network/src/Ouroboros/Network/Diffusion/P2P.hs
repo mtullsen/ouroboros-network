@@ -114,8 +114,6 @@ import           Ouroboros.Network.Server2 (ServerArguments (..),
                      ServerTrace (..))
 import qualified Ouroboros.Network.Server2 as Server
 
-import qualified Debug.Trace -- MT
-
 -- | P2P DiffusionTracers Extras
 --
 data TracersExtra ntnAddr ntnVersion ntnVersionData
@@ -972,7 +970,6 @@ runM Interfaces
                   -- tracks threads forked by 'PeerStateActions'
                   --
 
-                  -- Debug.Trace.trace "withPeerStateActions\n" $ -- MT
                   withPeerStateActions
                     PeerStateActionsArguments {
                         spsTracer = dtPeerSelectionActionsTracer,

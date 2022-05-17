@@ -33,8 +33,7 @@ import           Control.Monad.Class.MonadThrow
 import           Control.Monad.Class.MonadTime
 import           Control.Monad.Class.MonadTimer
 import           Control.Monad.IOSim
-import           Control.Tracer (Tracer (..), contramap, nullTracer,debugTracer)
-                  -- MT: debugTracer
+import           Control.Tracer (Tracer (..), contramap, nullTracer)
 
 import           GHC.Generics
 import           GHC.IO.Exception
@@ -77,7 +76,6 @@ tests =
     -- TODO: replace these tests with 'Test.Ouroboros.Network.Server2' simulation.
     testProperty "overwritten"                    unit_overwritten
   , testProperty "timeoutExpired"                 unit_timeoutExpired
-  , testProperty "new-bogus"                      True  -- MT
   ]
 
 

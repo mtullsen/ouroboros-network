@@ -34,7 +34,6 @@ import           Control.Monad.Class.MonadTimer
 import           Control.Concurrent.JobPool (Job (..), JobPool)
 import qualified Control.Concurrent.JobPool as JobPool
 import           Control.Tracer (Tracer, traceWith)
-import           Control.Tracer (debugTracer, contramap) -- MT-TEMP: debugging
 
 import           Data.ByteString.Lazy (ByteString)
 import           Data.Functor (($>))
@@ -554,7 +553,7 @@ withPeerStateActions
 withPeerStateActions PeerStateActionsArguments {
                        spsDeactivateTimeout,
                        spsCloseConnectionTimeout,
-                       spsTracer=_spsTracer,  -- MT-TEMP
+                       spsTracer,
                        spsConnectionManager
                      }
                      k =
@@ -568,8 +567,6 @@ withPeerStateActions PeerStateActionsArguments {
         }
 
   where
-
-    spsTracer = contramap show debugTracer -- MT-TEMP: spit out tracing to stderr
 
     -- Update PeerState with the new state only if the current state isn't
     -- cold. Returns True if the state wasn't PeerCold
