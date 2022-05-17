@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveFunctor       #-}
+
 {-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}

@@ -74,7 +74,7 @@ import           TestLib.InboundGovernor
                      remoteStrIsFinalTransition)
 
 tests :: TestTree
-tests =
+tests = 
   testGroup "Ouroboros.Network.Testnet"
   [ testGroup "multinodeSim"
     [ testProperty "diffusionScript fixupCommands idempotent"
@@ -101,7 +101,6 @@ tests =
                    prop_diffusion_timeouts_enforced
     ]
   ]
-
 
 -- Warning: be careful with writing properties that rely
 -- on trace events from multiple components environment.
