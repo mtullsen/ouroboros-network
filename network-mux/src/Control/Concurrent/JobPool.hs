@@ -25,6 +25,8 @@ import           Control.Monad.Class.MonadFork (MonadThread (..))
 import           Control.Monad.Class.MonadSTM
 import           Control.Monad.Class.MonadThrow
 
+-- | This module allows the management of a multiple Async jobs which
+-- are grouped by an 'Ord group => group' type.
 
 data JobPool group m a = JobPool {
        jobsVar         :: !(TVar m (Map (group, ThreadId m) (Async m ()))),
