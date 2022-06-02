@@ -529,10 +529,10 @@ peerSelectionGovernorLoop tracer
         Guarded (Just (Min wakeupAt)) decisionAction -> do
           let wakeupIn = diffTime wakeupAt blockedAt
           traceWith debugTracer (TraceGovernorState blockedAt (Just wakeupIn) st)
-          wakupTimeout <- newTimeout wakeupIn
-          let wakeup    = awaitTimeout wakupTimeout >> pure (wakeupDecision st)
+          wakeupTimeout <- newTimeout wakeupIn
+          let wakeup    = awaitTimeout wakeupTimeout >> pure (wakeupDecision st)
           timedDecision     <- atomically (decisionAction <|> wakeup)
-          cancelTimeout wakupTimeout
+          cancelTimeout wakeupTimeout
           return timedDecision
 
     guardedDecisions :: Time
