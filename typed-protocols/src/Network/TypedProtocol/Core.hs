@@ -82,7 +82,7 @@ import           Data.Void (Void)
 
 -- We will use as a running example a simple \"ping\/pong\" protocol. (You can
 -- see the example in full in "Network.TypedProtocol.PingPong.Type".) In this
--- example protocol the client sends a ping message and the serve must respond
+-- example protocol the client sends a ping message and the server must respond
 -- with a pong message. The client can also terminate the protocol. So modelled
 -- as a state machine this protocol has three states, the one in which the
 -- client can send a ping or terminate message, the one in which the server

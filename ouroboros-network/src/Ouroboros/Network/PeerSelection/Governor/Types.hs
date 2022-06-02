@@ -353,7 +353,7 @@ assertPeerSelectionState PeerSelectionState{..} =
 
     -- The localRootPeers are a subset of the knownPeers,
     -- and with correct source info in the knownPeers (either
-    -- 'PeerSroucePublicRoot' or 'PeerSourceLocalRoot', as local and public
+    -- 'PeerSourcePublicRoot' or 'PeerSourceLocalRoot', as local and public
     -- root peers might overlap).
   . assert (Set.isSubsetOf localRootPeersSet knownPeersSet)
 
@@ -477,7 +477,7 @@ pickPeers PeerSelectionState{localRootPeers, publicRootPeers, knownPeers}
 
 
 -- | The governor is using @Guarded m (Decision m peeraddr peerconn)@ where 'm'
--- is an 'STM' monad, to drive its progress.
+--   is an 'STM' monad, to drive its progress.
 --
 data Guarded m a =
     -- | 'GuardedSkip' is used to instruct that there is no action to be made
@@ -486,7 +486,7 @@ data Guarded m a =
     -- Let us note that the combined value which is computed by
     -- @guardedDecisions@ term in
     -- 'Ouroboros.Newtork.PeerSelection.Governor.peerSelectionGovernorLoop' will
-    -- never return it: this is bacause there are monitoring decisions which
+    -- never return it: this is because there are monitoring decisions which
     -- never return this constructor, e.g.  'Monitor.targetPeers',
     -- 'Monitor.jobs', 'Monitor.connections', and thus the governor has always
     -- something to do.
@@ -518,7 +518,7 @@ pattern Guarded a b <- Guarded' a (FirstToFinish b)
 --
 -- In the algebraic sense, @'Guarded' (Just minBound) (return x)@ is a left
 -- absorbing element when "m ~ STM m'@ for some monad @m'@.  There is no right
--- absorbing element since there is no right absorbing elemnt in @STM m'@.
+-- absorbing element since there is no right absorbing element in @STM m'@.
 --
 -- Ref. [absorbing element](https://en.wikipedia.org/wiki/Absorbing_element)
 --
@@ -549,7 +549,7 @@ data Decision m peeraddr peerconn = Decision {
 type TimedDecision m peeraddr peerconn = Time -> Decision m peeraddr peerconn
 
 -- | Type alias for function types which are used to create governor decisions.
--- Allmost all decisions are following this pattern.
+-- Almost all decisions are following this pattern.
 --
 type MkGuardedDecision peeraddr peerconn m
      = PeerSelectionPolicy peeraddr m

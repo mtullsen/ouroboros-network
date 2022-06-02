@@ -499,7 +499,7 @@ peerSelectionGovernorLoop tracer
 
       timedDecision <- evalGuardedDecisions blockedAt st'
 
-      -- get the current time after the governor returned from the blocking
+      -- get the current time after the governor returns from the blocking
       -- 'evalGuardedDecisions' call.
       now <- getMonotonicTime
       let Decision { decisionTrace, decisionJobs, decisionState } =

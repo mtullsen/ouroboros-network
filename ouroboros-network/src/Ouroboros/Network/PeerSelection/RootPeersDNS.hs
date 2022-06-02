@@ -84,7 +84,7 @@ data TraceLocalRootPeers peerAddr exception =
 
 -- | Resolve 'RelayAddress'-es of local root peers using dns if needed.  Local
 -- roots are provided wrapped in a 'StrictTVar', which value might change
--- (re-read form a config file).  The resolved dns names are available through
+-- (re-read from a config file).  The resolved dns names are available through
 -- the output 'StrictTVar'.
 --
 localRootPeersProvider
