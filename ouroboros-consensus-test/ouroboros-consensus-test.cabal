@@ -308,3 +308,30 @@ test-suite test-infra
                        -Wredundant-constraints
                        -Wmissing-export-lists
                        -fno-ignore-asserts
+
+test-suite test-examples
+  type:                exitcode-stdio-1.0
+  hs-source-dirs:      test-examples
+  main-is:             Main.hs
+  other-modules:
+                       Test.Example
+
+  build-depends:       base
+                     , QuickCheck
+                     , tasty
+                     , tasty-quickcheck
+
+                     , ouroboros-consensus
+                     , ouroboros-consensus-test
+
+  default-language:    Haskell2010
+  ghc-options:         -Wall
+                       -Wcompat
+                       -Wincomplete-uni-patterns
+                       -Wincomplete-record-updates
+                       -Wpartial-fields
+                       -Widentities
+                       -Wredundant-constraints
+                       -Wmissing-export-lists
+                       -fno-ignore-asserts
+                       
