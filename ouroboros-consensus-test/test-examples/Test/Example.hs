@@ -1,3 +1,14 @@
-module Test.Example where
+module Test.Example
+  ( test1
+  )
+  where
 
-test1 = 1
+import           Test.Tasty
+import           Test.Tasty.QuickCheck
+
+
+test1 = testProperty "prop_example1" prop_example1
+
+prop_example1 :: Bool
+prop_example1 = True
+

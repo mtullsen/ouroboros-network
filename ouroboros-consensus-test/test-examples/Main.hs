@@ -2,14 +2,14 @@ module Main (main) where
 
 import           Test.Tasty
 
-import           Test.Example
-
+import           Test.Example (test1)
 
 main :: IO ()
-main = defaultMain tests
+main = defaultMain test
 
-tests :: TestTree
-tests =
+test :: TestTree
+test =
   testGroup "ouroboros-examples"
-  [ return True -- ??
+  [ test1
   ]
+

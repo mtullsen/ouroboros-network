@@ -314,7 +314,7 @@ test-suite test-examples
   hs-source-dirs:      test-examples
   main-is:             Main.hs
   other-modules:
-                       Test.Examples
+                       Test.Example
 
   build-depends:       base
                      , QuickCheck
