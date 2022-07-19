@@ -4,7 +4,8 @@
 
 module Test.Example
   ( test1
-  -- making exploration easier (no other reason)
+  
+  -- making exploration easier (no other reason):
   , module Ouroboros.Consensus.Protocol.Abstract
   )
   where
@@ -22,9 +23,10 @@ import           Test.Tasty.QuickCheck
 import           Ouroboros.Consensus.Protocol.Abstract
 import           Ouroboros.Consensus.Config.SecurityParam
                  -- though ...Protocol.Abstract does a convenience re-export
-
 import           Ouroboros.Consensus.Block.Abstract (SlotNo)
 import           Ouroboros.Consensus.Ticked
+
+-- pkg ?:
 import           NoThunks.Class (NoThunks, OnlyCheckWhnfNamed (..))
 
 ---- tests -------------------------------------------------------------------
