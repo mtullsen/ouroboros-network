@@ -318,9 +318,11 @@ test-suite test-examples
 
   build-depends:       base
                      , QuickCheck
+                     , containers
                      , tasty
                      , tasty-quickcheck
 
+                     , nothunks
                      , ouroboros-consensus
                      , ouroboros-consensus-test
 
