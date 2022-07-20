@@ -35,6 +35,7 @@ import           Ouroboros.Consensus.Block.SupportsProtocol
 import           Ouroboros.Consensus.Protocol.Abstract
 import           Ouroboros.Consensus.Ticked
 import           Ouroboros.Consensus.Ledger.Abstract
+import           Ouroboros.Consensus.Ledger.SupportsMempool (GenTx)
 
 ---- tests -------------------------------------------------------------------
 -- TODO: put something interesting in here.
@@ -115,8 +116,8 @@ type instance BlockProtocol TrivBlock = SP
 data TrivBlock =
     TrivBlock
       { tb_header :: Header TrivBlock
+      , tb_body   :: [GenTx TrivBlock]
       -- , tb_Epoch  :: EpochNo
-      -- , tb_body   :: [GenTx TrivBlock]  -- TODO!
       }
   deriving NoThunks via OnlyCheckWhnfNamed "TrivBlock" TrivBlock
 
@@ -136,7 +137,7 @@ data instance Header TrivBlock = HdrTB {
 
 instance BlockSupportsProtocol TrivBlock where
   validateView _ _ = ()
-  -- selectView   = stub  -- method defaulted: understand.
+  -- selectView   = stub  -- method defaulted.  (TODO: understand.)
 
 
 -- | the two direct super-classes of BlockSupportsProtocol:
@@ -188,7 +189,7 @@ data instance StorageConfig TrivBlock = SCfgTrivBlock
   deriving (Generic, NoThunks)
 
 
----- Now, define a Plain Ledger ----------------------------------------------
+---- Now, define a Plain Ledger, A -------------------------------------------
 
 data instance LedgerState TrivBlock = LedgerA {
       lgrA_tip :: Point TrivBlock
@@ -200,11 +201,17 @@ data instance LedgerState TrivBlock = LedgerA {
   deriving NoThunks via OnlyCheckWhnfNamed "LedgerA" (LedgerState TrivBlock)
 
 
+data instance GenTx TrivBlock = TxA { txName :: String }
+  deriving (Show, Eq, Generic, Serialise)
+  deriving NoThunks via OnlyCheckWhnfNamed "TxA" (GenTx TrivBlock)
+
+
 ---- data --------------------------------------------------------------------
 
 trivBlock :: TrivBlock
-trivBlock = stub -- TrivBlock { tbSignature= SignatureTrivBlock
-                 --  }
+trivBlock = TrivBlock { tb_header= HdrTB stub stub -- TODO
+                      , tb_body  = [TxA "tx1", TxA "tx2"]
+                      }
 
 ---- library -----------------------------------------------------------------
 
