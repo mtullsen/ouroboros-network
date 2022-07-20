@@ -47,12 +47,8 @@ prop_example1 :: Bool
 prop_example1 = True
 
 
----- Simplest Protocol 'SP' --------------------------------------------------
+---- Define Protocol 'SP' - Simplest Protocol --------------------------------
 
-k :: SecurityParam
-k = SecurityParam {maxRollbacks= 0}
-  -- Q. any reason we need to put into ConsensusConfig?
-  
 data SP             -- The Simplest Protocol
 
 data SP_CanBeLeader = SP_CanBeLeader -- Evidence that we /can/ be a leader
@@ -96,27 +92,42 @@ instance ConsensusProtocol SP where
   
   reupdateChainDepState _ _ _ _ = ()
 
+k :: SecurityParam
+k = SecurityParam {maxRollbacks= 0}
+  -- Q. any reason we need to put into ConsensusConfig?
+  
 
 ---- Trivial Block (for the SP protocol) -------------------------------------
--- see 4.3 in [CCASL]
 --
--- borrowing from
---  - https://iohk.io/en/blog/posts/2020/05/28/the-abstract-nature-of-the-consensus-layer/
---      which references 'MiniConsensus.hs'
---  - ouroboros-consensus-test/test-consensus/Test/Consensus/HardFork/Combinator/A.hs
-
-data TrivBlock =
-    TrivBlock
-      { tbSignature :: Header TrivBlock
-      , tbEpoch     :: EpochNo
-      -- , tbRelSlot   :: RelSlot
-      }
-  deriving NoThunks via OnlyCheckWhnfNamed "TrivBlock" TrivBlock
+--   see 4.3 in [CCASL]
+--
+--   borrowing from
+--    - https://iohk.io/en/blog/posts/2020/05/28/the-abstract-nature-of-the-consensus-layer/
+--        which references 'MiniConsensus.hs'
+--    - ouroboros-consensus-test/test-consensus/Test/Consensus/HardFork/Combinator/A.hs
 
 -- | Map the block to a consensus protocol
 type instance BlockProtocol TrivBlock = SP
   -- Q. A block cannot be used in multiple protocols?
-  
+
+-- | Define TrivBlock
+data TrivBlock =
+    TrivBlock
+      { tb_header :: Header TrivBlock
+      -- , tb_Epoch  :: EpochNo
+      -- , tb_body   :: [GenTx TrivBlock]  -- TODO!
+      }
+  deriving NoThunks via OnlyCheckWhnfNamed "TrivBlock" TrivBlock
+
+data instance Header TrivBlock = HdrTB {
+      hdrTB_fields :: HeaderFields TrivBlock
+    , hdrTB_prev   :: ChainHash    TrivBlock
+    }
+  deriving stock    (Show, Eq, Generic)
+  deriving anyclass (Serialise)
+  deriving NoThunks via OnlyCheckWhnfNamed "HdrTB" (Header TrivBlock)
+
+
 -- NOTE: BlockSupportsProtocol has *many* superclasses.
 
 
@@ -130,12 +141,12 @@ instance BlockSupportsProtocol TrivBlock where
 -- | the two direct super-classes of BlockSupportsProtocol:
 
 instance GetHeader TrivBlock where
-  getHeader          = tbSignature
+  getHeader          = tb_header
   blockMatchesHeader = \_ _ -> True -- We are not interested in integrity here
   headerIsEBB        = const Nothing
 
 instance GetPrevHash TrivBlock where
-  headerPrevHash = stub -- hdrB_prev  -- FIXME!
+  headerPrevHash = hdrTB_prev
 
 
 {- NOTE
@@ -149,7 +160,7 @@ Q. this feels ~ awkward, motivation/explanation?
 
 
 instance HasHeader TrivBlock where
-  getHeaderFields = stub 
+  getHeaderFields = stub -- TODO: getBlockHeaderFields
                     -- see doc in *.Block.Abstract ; ~complex
                     -- getBlockHeaderFields - seems to rely on a bit more
                     
@@ -161,9 +172,6 @@ type instance HeaderHash  TrivBlock = String -- Strict.ByteString
 instance HasHeader (Header TrivBlock) where
   getHeaderFields _b = stub :: HeaderFields (Header TrivBlock)
                     -- castHeaderFields . tbSignature
-
-data instance Header TrivBlock = SignatureTrivBlock
-  deriving (Generic, NoThunks)
 
 data instance BlockConfig TrivBlock = BCfgTrivBlock
   deriving (Generic, NoThunks)
@@ -190,9 +198,8 @@ data instance LedgerState TrivBlock = LedgerA {
 ---- data --------------------------------------------------------------------
 
 trivBlock :: TrivBlock
-trivBlock = TrivBlock { tbSignature= SignatureTrivBlock
-                      , tbEpoch= EpochNo 5
-                      }
+trivBlock = stub -- TrivBlock { tbSignature= SignatureTrivBlock
+                 --  }
 
 ---- library -----------------------------------------------------------------
 
