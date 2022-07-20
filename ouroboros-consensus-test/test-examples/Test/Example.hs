@@ -23,8 +23,11 @@ import           GHC.Generics (Generic)
 import           Test.Tasty
 import           Test.Tasty.QuickCheck
 
--- pkg ?:
+-- pkg nothunks:
 import           NoThunks.Class (NoThunks, OnlyCheckWhnfNamed (..))
+
+-- pkg serialise:
+import           Codec.Serialise
 
 -- pkg ouroboros-consensus:
 import           Ouroboros.Consensus.Block.Abstract
@@ -32,6 +35,7 @@ import           Ouroboros.Consensus.Block.SupportsProtocol
 import           Ouroboros.Consensus.Protocol.Abstract
 import           Ouroboros.Consensus.Ticked
 
+import           Ouroboros.Consensus.Ledger.Abstract
 
 ---- tests -------------------------------------------------------------------
 -- TODO: put something interesting in here.
@@ -54,18 +58,26 @@ data SP             -- The Simplest Protocol
 data SP_CanBeLeader = SP_CanBeLeader -- Evidence that we /can/ be a leader
 data SP_IsLeader    = SP_IsLeader    -- Evidence that we /are/ leader
 
-
 data instance ConsensusConfig SP =
-  SP_Config { cfgsp_iLeadInSlots :: Set SlotNo }
+  SP_Config { cfgsp_iLeadInSlots :: Set SlotNo
+            }
   deriving NoThunks via OnlyCheckWhnfNamed "SP_Config" (ConsensusConfig SP)
 
 instance ConsensusProtocol SP where
   type ChainDepState SP = ()
   type IsLeader      SP = SP_IsLeader
   type CanBeLeader   SP = SP_CanBeLeader
-  type SelectView    SP = BlockNo
+  
+  -- | View on a block header required for chain selection.
+  --   Here, BlockNo is sufficient (also the default):
+  type SelectView    SP = BlockNo        
+
+  -- | View on the ledger required by the protocol
   type LedgerView    SP = ()
-  type ValidateView  SP = ()
+  
+  -- | View on a block header required for header validation
+  type ValidateView  SP = ()              
+  
   type ValidationErr SP = Void
 
   checkIsLeader cfg SP_CanBeLeader slot _tcds =
@@ -76,7 +88,6 @@ instance ConsensusProtocol SP where
   protocolSecurityParam _cfg = k
 
   tickChainDepState     _ _ _ _ = TickedTrivial
-                                  -- TODO: huh? explore implem.
                                   -- works b/c ChainDepState SP = ()
                                   
     -- [the doc doesn't make entirely clear]
@@ -96,35 +107,46 @@ instance ConsensusProtocol SP where
 
 data TrivBlock =
     TrivBlock
-      { bbSignature :: Header TrivBlock
-      , bbEpoch     :: EpochNo
-      -- , bbRelSlot   :: RelSlot
+      { tbSignature :: Header TrivBlock
+      , tbEpoch     :: EpochNo
+      -- , tbRelSlot   :: RelSlot
       }
   deriving NoThunks via OnlyCheckWhnfNamed "TrivBlock" TrivBlock
 
-  -- TODO: change name, this defn. too simple for Byron!
-
+-- | Map the block to a consensus protocol
 type instance BlockProtocol TrivBlock = SP
+  -- Q. A block cannot be used in multiple protocols?
+  
+-- NOTE: BlockSupportsProtocol has *many* superclasses.
 
 
--- BlockSupportsProtocol has *many* superclasses!
-
+-- | evidence TrivBlock supports (BlockProtocol TrivBlock), the methods:
 
 instance BlockSupportsProtocol TrivBlock where
-  validateView = stub -- const bbSignature
-  selectView   = stub -- bbSlotNo  -- has default (to ?)
+  validateView = stub -- const tbSignature
+  selectView   = stub -- tbSlotNo  -- has default (to ?)
 
 
-data instance Header TrivBlock = Signature
-  deriving NoThunks via OnlyCheckWhnfNamed "TrivBlock" (Header TrivBlock)
+-- | the two direct super-classes of BlockSupportsProtocol:
 
 instance GetHeader TrivBlock where
-  getHeader          = bbSignature
+  getHeader          = tbSignature
   blockMatchesHeader = \_ _ -> True -- We are not interested in integrity here
   headerIsEBB        = const Nothing
 
 instance GetPrevHash TrivBlock where
-  headerPrevHash = stub -- hdrB_prev
+  headerPrevHash = stub -- hdrB_prev  -- FIXME!
+
+
+{- NOTE
+
+Q. this feels ~ awkward, motivation/explanation?
+
+  class HasHeader (Header blk) ⇒ GetHeader blk where
+  class (HasHeader blk, GetHeader blk) ⇒ GetPrevHash blk where
+
+-}
+
 
 instance HasHeader TrivBlock where
   getHeaderFields = stub 
@@ -132,13 +154,16 @@ instance HasHeader TrivBlock where
                     -- getBlockHeaderFields - seems to rely on a bit more
                     
 instance StandardHash TrivBlock
-  -- ?!
   
 type instance HeaderHash  TrivBlock = String -- Strict.ByteString
 
+
 instance HasHeader (Header TrivBlock) where
-  getHeaderFields _b = stub -- :: HeaderFields (Header TrivBlock)
-                    -- castHeaderFields . bbSignature
+  getHeaderFields _b = stub :: HeaderFields (Header TrivBlock)
+                    -- castHeaderFields . tbSignature
+
+data instance Header TrivBlock = SignatureTrivBlock
+  deriving (Generic, NoThunks)
 
 data instance BlockConfig TrivBlock = BCfgTrivBlock
   deriving (Generic, NoThunks)
@@ -149,6 +174,25 @@ data instance CodecConfig TrivBlock = CCfgTrivBlock
 data instance StorageConfig TrivBlock = SCfgTrivBlock
   deriving (Generic, NoThunks)
 
+
+---- Now, define a Plain Ledger ----------------------------------------------
+
+data instance LedgerState TrivBlock = LedgerA {
+      lgrA_tip :: Point TrivBlock
+
+      -- | The 'SlotNo' of the block containing the 'InitiateAtoB' transaction
+    , lgrA_transition :: Maybe SlotNo
+    }
+  deriving (Show, Eq, Generic, Serialise)
+  deriving NoThunks via OnlyCheckWhnfNamed "LedgerA" (LedgerState TrivBlock)
+
+
+---- data --------------------------------------------------------------------
+
+trivBlock :: TrivBlock
+trivBlock = TrivBlock { tbSignature= SignatureTrivBlock
+                      , tbEpoch= EpochNo 5
+                      }
 
 ---- library -----------------------------------------------------------------
 

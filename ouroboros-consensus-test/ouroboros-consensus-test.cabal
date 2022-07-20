@@ -319,10 +319,12 @@ test-suite test-examples
   build-depends:       base
                      , QuickCheck
                      , containers
+                     
                      , tasty
                      , tasty-quickcheck
-
                      , nothunks
+                     , serialise
+
                      , ouroboros-consensus
                      , ouroboros-consensus-test
 
