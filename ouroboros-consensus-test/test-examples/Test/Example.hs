@@ -34,7 +34,6 @@ import           Ouroboros.Consensus.Block.Abstract
 import           Ouroboros.Consensus.Block.SupportsProtocol
 import           Ouroboros.Consensus.Protocol.Abstract
 import           Ouroboros.Consensus.Ticked
-
 import           Ouroboros.Consensus.Ledger.Abstract
 
 ---- tests -------------------------------------------------------------------
@@ -58,6 +57,7 @@ data instance ConsensusConfig SP =
   SP_Config { cfgsp_iLeadInSlots :: Set SlotNo
             }
   deriving NoThunks via OnlyCheckWhnfNamed "SP_Config" (ConsensusConfig SP)
+
 
 instance ConsensusProtocol SP where
   type ChainDepState SP = ()
@@ -95,6 +95,7 @@ instance ConsensusProtocol SP where
 k :: SecurityParam
 k = SecurityParam {maxRollbacks= 0}
   -- Q. any reason we need to put into ConsensusConfig?
+  -- not generally a system constant?
   
 
 ---- Trivial Block (for the SP protocol) -------------------------------------
@@ -134,8 +135,8 @@ data instance Header TrivBlock = HdrTB {
 -- | evidence TrivBlock supports (BlockProtocol TrivBlock), the methods:
 
 instance BlockSupportsProtocol TrivBlock where
-  validateView = stub -- const tbSignature
-  selectView   = stub -- tbSlotNo  -- has default (to ?)
+  validateView _ _ = ()
+  -- selectView   = stub  -- method defaulted: understand.
 
 
 -- | the two direct super-classes of BlockSupportsProtocol:
@@ -156,22 +157,26 @@ Q. this feels ~ awkward, motivation/explanation?
   class HasHeader (Header blk) ⇒ GetHeader blk where
   class (HasHeader blk, GetHeader blk) ⇒ GetPrevHash blk where
 
+Q. motivation/explanation?
+
+  both TrivBlock and (Header TrivBlock) in 'HasHeader' ?
+
 -}
 
 
 instance HasHeader TrivBlock where
-  getHeaderFields = stub -- TODO: getBlockHeaderFields
+  getHeaderFields = getBlockHeaderFields
                     -- see doc in *.Block.Abstract ; ~complex
-                    -- getBlockHeaderFields - seems to rely on a bit more
+                    -- getBlockHeaderFields - seems to rely on ...
                     
+instance HasHeader (Header TrivBlock) where
+  getHeaderFields = castHeaderFields . hdrTB_fields
+                       
 instance StandardHash TrivBlock
   
 type instance HeaderHash  TrivBlock = String -- Strict.ByteString
 
 
-instance HasHeader (Header TrivBlock) where
-  getHeaderFields _b = stub :: HeaderFields (Header TrivBlock)
-                    -- castHeaderFields . tbSignature
 
 data instance BlockConfig TrivBlock = BCfgTrivBlock
   deriving (Generic, NoThunks)
