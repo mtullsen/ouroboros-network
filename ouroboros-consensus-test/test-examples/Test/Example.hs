@@ -87,17 +87,59 @@ instance ConsensusProtocol SP where
   tickChainDepState     _ _ _ _ = TickedTrivial
                                   -- works b/c ChainDepState SP = ()
                                   
-    -- [the doc doesn't make entirely clear]
-    
   updateChainDepState   _ _ _ _ = return ()
   
   reupdateChainDepState _ _ _ _ = ()
 
+  -- NF: TODO: look at Shelley instance of ^
+  -- 
+  -- Q. whatsup with last three methods?
+  -- A. see next
+  
+{-
+
+ Notes from Nick wrt class ConsensusProtocol:
+
+  Fundamental idea here
+    - header/block split
+
+ Three concepts:
+   1. 
+    chaindepstate = state you need as validating headers, state you can
+    update as you get headers (w/o having [interleaving] blocks)
+
+     (related to the header/block split concept!)
+
+   2. concept: ticking.
+     - can get chaindep state for _
+     - moving through time: tick
+     - ledger state in slot, then tick, remember slot we started from.
+       - ticked info: this is data we need, but not in the original _
+   
+   3. update vs reupdate
+     - reupdateChainDepState
+        - note: doesn't check header, no fail; call when header known good.
+
+       -- | Apply a header
+       updateChainDepState :: HasCallStack
+                           => ConsensusConfig       p
+                           -> ValidateView          p  -- this from header
+                           -> SlotNo
+                           -> Ticked (ChainDepState p) -- we had to tick to get her
+                           -> Except (ValidationErr p) (ChainDepState p)
+            -- before and after.
+            -- better name: apply header
+  
+-}
+
 k :: SecurityParam
 k = SecurityParam {maxRollbacks= 0}
   -- Q. any reason we need to put into ConsensusConfig?
-  -- not generally a system constant?
-  
+  -- Q. not generally a system constant?
+  --   NF: k be different for diff nodes?  Probably not: A property of the chain!
+  --   ConsensusConfig and the node's config file: generally 1-1.
+  --    - but maybe ConsensusConfig is also serving as "global variable container"?
+  --    - BTW, look at logic to build ConsensusConfig.
 
 ---- Trivial Block (for the SP protocol) -------------------------------------
 --
@@ -106,23 +148,24 @@ k = SecurityParam {maxRollbacks= 0}
 --   borrowing from
 --    - https://iohk.io/en/blog/posts/2020/05/28/the-abstract-nature-of-the-consensus-layer/
 --        which references 'MiniConsensus.hs'
---    - ouroboros-consensus-test/test-consensus/Test/Consensus/HardFork/Combinator/A.hs
+
+--    - ouroboros-consensus-test/test-consensus/Test/Consensus/HardFork/Combinator/A.hs & B.hs
 
 -- | Map the block to a consensus protocol
 type instance BlockProtocol TrivBlock = SP
-  -- Q. A block cannot be used in multiple protocols?
+  -- Q. A block cannot be used in multiple protocols? No. Ultimately block determines protocol.
 
 -- | Define TrivBlock
 data TrivBlock =
     TrivBlock
       { tb_header :: Header TrivBlock
-      , tb_body   :: [GenTx TrivBlock]
+      , tb_body   :: [GenTx TrivBlock]  -- NF: remove for first.
       -- , tb_Epoch  :: EpochNo
       }
   deriving NoThunks via OnlyCheckWhnfNamed "TrivBlock" TrivBlock
 
 data instance Header TrivBlock = HdrTB {
-      hdrTB_fields :: HeaderFields TrivBlock
+      hdrTB_fields :: HeaderFields TrivBlock -- NF: inline! make simpler.
     , hdrTB_prev   :: ChainHash    TrivBlock
     }
   deriving stock    (Show, Eq, Generic)
@@ -137,8 +180,7 @@ data instance Header TrivBlock = HdrTB {
 
 instance BlockSupportsProtocol TrivBlock where
   validateView _ _ = ()
-  -- selectView   = stub  -- method defaulted.  (TODO: understand.)
-
+  -- selectView   = stub  -- method defaulted.  (MT-TODO: understand.)
 
 -- | the two direct super-classes of BlockSupportsProtocol:
 
@@ -151,12 +193,17 @@ instance GetPrevHash TrivBlock where
   headerPrevHash = hdrTB_prev
 
 
-{- NOTE
+{- TODO: Turn this into text/explanation.
+
+(BTW, be nice to have a class hierarchy diagram.)
 
 Q. this feels ~ awkward, motivation/explanation?
 
-  class HasHeader (Header blk) ⇒ GetHeader blk where
+  class HasHeader (Header blk) ⇒ GetHeader blk where ...
+
   class (HasHeader blk, GetHeader blk) ⇒ GetPrevHash blk where
+
+  -- NF: just to overload 'getHeader': works on block/header.
 
 Q. motivation/explanation?
 
@@ -169,10 +216,14 @@ instance HasHeader TrivBlock where
   getHeaderFields = getBlockHeaderFields
                     -- see doc in *.Block.Abstract ; ~complex
                     -- getBlockHeaderFields - seems to rely on ...
+
                     
 instance HasHeader (Header TrivBlock) where
   getHeaderFields = castHeaderFields . hdrTB_fields
-                       
+  
+  -- NOTE: Header is type-constructor, not type-family!
+  --  - hard to keep these things straight.
+  
 instance StandardHash TrivBlock
   
 type instance HeaderHash  TrivBlock = String -- Strict.ByteString
@@ -193,18 +244,22 @@ data instance StorageConfig TrivBlock = SCfgTrivBlock
 
 data instance LedgerState TrivBlock = LedgerA {
       lgrA_tip :: Point TrivBlock
-
+        -- (header hash and slot num)
+        
+      -- TODO: get rid of this:
       -- | The 'SlotNo' of the block containing the 'InitiateAtoB' transaction
     , lgrA_transition :: Maybe SlotNo
     }
   deriving (Show, Eq, Generic, Serialise)
   deriving NoThunks via OnlyCheckWhnfNamed "LedgerA" (LedgerState TrivBlock)
 
+  -- BTW: A&B were testing the transition.
 
 data instance GenTx TrivBlock = TxA { txName :: String }
   deriving (Show, Eq, Generic, Serialise)
   deriving NoThunks via OnlyCheckWhnfNamed "TxA" (GenTx TrivBlock)
 
+-- triv block has no tx's.
 
 ---- data --------------------------------------------------------------------
 

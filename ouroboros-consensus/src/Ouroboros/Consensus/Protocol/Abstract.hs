@@ -143,14 +143,34 @@ class ( Show (ChainDepState   p)
                     -> ChainDepState p
                     -> Ticked (ChainDepState p)
 
+   -- 3 concepts:
+   -- 
+   -- chaindepstate = state you need as validating headers, state you can
+   --  update as you get headers (w/o having [interleaving] blocks)
+    
+   -- concept: ticking.
+   --   - can get chaindep state for
+   --   - moving through time: tick
+   -- ledger state in slot, then tick, remember slot we started from.
+   --  - data we need, not in original
+
+   -- update vs reupdate.
+    
+  -- reupdateChainDepState
+  --  note: doesn't check header, no fail; call when header known good.
+    -- Blocks
+    --  - 
+
   -- | Apply a header
   updateChainDepState :: HasCallStack
                       => ConsensusConfig       p
-                      -> ValidateView          p
+                      -> ValidateView          p  -- this from header
                       -> SlotNo
-                      -> Ticked (ChainDepState p)
+                      -> Ticked (ChainDepState p) -- we had to tick to get her
                       -> Except (ValidationErr p) (ChainDepState p)
-
+       -- before and after.
+       -- better name: apply header
+                      
   -- | Re-apply a header to the same 'ChainDepState' we have been able to
   -- successfully apply to before.
   --
@@ -168,7 +188,6 @@ class ( Show (ChainDepState   p)
                         -> SlotNo
                         -> Ticked (ChainDepState p)
                         -> ChainDepState         p
-
   -- | We require that protocols support a @k@ security parameter
   protocolSecurityParam :: ConsensusConfig p -> SecurityParam
 
