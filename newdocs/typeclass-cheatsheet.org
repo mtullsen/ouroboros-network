@@ -26,15 +26,14 @@ TYPE-FUNCTIONS:
 
 TYPE-CLASSES:
 
-() => ConsensusProtocol p
-  where
+class ConsensusProtocol p where
   checkIsLeader         :: cc -> cbldr -> SlotNo -> Ticked cds -> Maybe isldr       -- if leader this slot, 'Just evidence'
   tickChainDepState     :: cc -> Ticked ledvw -> SlotNo -> cds -> Ticked cds        -- tick the cds to the SlotNo
   updateChainDepState   :: cc -> valvw -> SlotNo -> Ticked cds -> Except valerr cds -- apply header to cds [may error]
   reupdateChainDepState :: cc -> valvw -> SlotNo -> Ticked cds -> cds               -- re-apply header to cds [no error]
   protocolSecurityParam :: cc -> SecurityParam                                      -- get 'k'
 
-                             (GetHeader b, GetPrevHash b, ConsensusProtocol p) => BlockSupportsProtocol b where
+                             class (GetHeader b, GetPrevHash b, ConsensusProtocol p) => BlockSupportsProtocol b where
                                 validateView :: BlockConfig b -> Header b -> ValidateView p
                                 selectView   :: BlockConfig b -> Header b -> SelectView p
 
