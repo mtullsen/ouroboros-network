@@ -1,4 +1,4 @@
-* The CheatSheet [view fixed-font, 132 chars wide
+* The CheatSheet [view fixed-font, at least 132 chars wide]
 
 TYPE-FUNCTIONS:  
 
@@ -14,12 +14,12 @@ TYPE-FUNCTIONS:
                                       b --(StorageConfig :: B->*)----> sc  -- 
                                       b --(Header        :: B->*)----> hdr
 
-                                      b ------------------- (GenTx b :: B->T)---> tx
+                                      b ------------------- (GenTx :: B->T)---> tx
                                         
-    p --(ChainDepState :: P->*)--> cds
+    p --(ChainDepState :: P->*)--> cds     -- protocol specific state (part that depends on the chain), may rollback
     p --(IsLeader      :: P->*)--> isldr   -- evidence that a node /is/ the leader
     p --(CanBeLeader   :: P->*)--> cbldr   -- evidence that we /can/ be leader
-    p --(SelectView    :: P->*)--> selvw   -- projection of header required for chain selection (often BlockNo)
+    p --(SelectView    :: P->*)--> selvw   -- projection of header required to do chain selection (often equals BlockNo)
     p --(ValidateView  :: P->*)--> valvw   -- projection of header required to validate it
     p --(LedgerView    :: P->*)--> ledvw   -- projection of the ledger state ('l') that consensus needs
     p --(ValidationErr :: P->*)--> valerr  -- validation errors
@@ -27,11 +27,11 @@ TYPE-FUNCTIONS:
 TYPE-CLASSES:
 
 class ConsensusProtocol p where
-  checkIsLeader         :: cc -> cbldr -> SlotNo -> Ticked cds -> Maybe isldr       -- if leader this slot, 'Just evidence'
+  checkIsLeader         :: cc -> cbldr -> SlotNo -> Ticked cds -> Maybe isldr       -- if we lead this slot, 'Just evidence'
   tickChainDepState     :: cc -> Ticked ledvw -> SlotNo -> cds -> Ticked cds        -- tick the cds to the SlotNo
   updateChainDepState   :: cc -> valvw -> SlotNo -> Ticked cds -> Except valerr cds -- apply header to cds [may error]
   reupdateChainDepState :: cc -> valvw -> SlotNo -> Ticked cds -> cds               -- re-apply header to cds [no error]
-  protocolSecurityParam :: cc -> SecurityParam                                      -- get 'k'
+  protocolSecurityParam :: cc -> SecurityParam                                      -- get security parameter 'k'
 
                              class (GetHeader b, GetPrevHash b, ConsensusProtocol p) => BlockSupportsProtocol b where
                                 validateView :: BlockConfig b -> Header b -> ValidateView p
@@ -68,5 +68,6 @@ class ConsensusProtocol p where
 
 - header oriented classes
 - other type functions
-- see ... in Ledger.Abstract
-    
+- see ... in **.Ledger.Abstract
+- be consistent: ascii vs unicode arrows & etc
+      
