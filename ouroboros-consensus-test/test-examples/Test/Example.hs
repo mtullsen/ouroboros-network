@@ -61,6 +61,7 @@ data instance ConsensusConfig SP =
 
 
 instance ConsensusProtocol SP where
+  
   type ChainDepState SP = ()
   type IsLeader      SP = SP_IsLeader
   type CanBeLeader   SP = SP_CanBeLeader
@@ -98,7 +99,7 @@ instance ConsensusProtocol SP where
   
 {-
 
- Notes from Nick wrt class ConsensusProtocol:
+ Notes from Nick F. wrt class ConsensusProtocol:
 
   Fundamental idea here
     - header/block split
@@ -153,19 +154,21 @@ k = SecurityParam {maxRollbacks= 0}
 
 -- | Map the block to a consensus protocol
 type instance BlockProtocol TrivBlock = SP
-  -- Q. A block cannot be used in multiple protocols? No. Ultimately block determines protocol.
 
+  -- Q. No need for a certain block type to be used in multiple protocols?  (Of course newtype could allow for this.)
+  -- A. No. Ultimately block determines protocol.
+  
 -- | Define TrivBlock
 data TrivBlock =
     TrivBlock
       { tb_header :: Header TrivBlock
-      , tb_body   :: [GenTx TrivBlock]  -- NF: remove for first.
-      -- , tb_Epoch  :: EpochNo
       }
   deriving NoThunks via OnlyCheckWhnfNamed "TrivBlock" TrivBlock
 
+  -- TrivBlock has no tx's.
+
 data instance Header TrivBlock = HdrTB {
-      hdrTB_fields :: HeaderFields TrivBlock -- NF: inline! make simpler.
+      hdrTB_fields :: HeaderFields TrivBlock -- TODO: NF: inline! make simpler.
     , hdrTB_prev   :: ChainHash    TrivBlock
     }
   deriving stock    (Show, Eq, Generic)
@@ -174,7 +177,7 @@ data instance Header TrivBlock = HdrTB {
 
 
 -- NOTE: BlockSupportsProtocol has *many* superclasses.
-
+-- - actually, once you remove 'noisy' ones, you only have 
 
 -- | evidence TrivBlock supports (BlockProtocol TrivBlock), the methods:
 
@@ -244,29 +247,35 @@ data instance StorageConfig TrivBlock = SCfgTrivBlock
 
 data instance LedgerState TrivBlock = LedgerA {
       lgrA_tip :: Point TrivBlock
-        -- (header hash and slot num)
-        
-      -- TODO: get rid of this:
-      -- | The 'SlotNo' of the block containing the 'InitiateAtoB' transaction
-    , lgrA_transition :: Maybe SlotNo
+      -- (header hash and slot num)
     }
   deriving (Show, Eq, Generic, Serialise)
   deriving NoThunks via OnlyCheckWhnfNamed "LedgerA" (LedgerState TrivBlock)
 
   -- BTW: A&B were testing the transition.
 
-data instance GenTx TrivBlock = TxA { txName :: String }
-  deriving (Show, Eq, Generic, Serialise)
-  deriving NoThunks via OnlyCheckWhnfNamed "TxA" (GenTx TrivBlock)
-
--- triv block has no tx's.
 
 ---- data --------------------------------------------------------------------
 
 trivBlock :: TrivBlock
 trivBlock = TrivBlock { tb_header= HdrTB stub stub -- TODO
-                      , tb_body  = [TxA "tx1", TxA "tx2"]
                       }
+
+
+---- pill 2 ------------------------------------------------------------------
+-- TODO: put into separate module.
+
+data Block2 = Block2
+      -- , tb_body   :: [GenTx TrivBlock]
+      -- , tb_Epoch  :: EpochNo
+
+data instance GenTx Block2 = Tx2 { txName :: String }
+  deriving (Show, Eq, Generic, Serialise)
+  deriving NoThunks via OnlyCheckWhnfNamed "Tx2" (GenTx Block2)
+
+exaBlock2 = Block2
+              -- , tb_body  = [TxA "tx1", TxA "tx2"]
+
 
 ---- library -----------------------------------------------------------------
 
