@@ -315,6 +315,7 @@ test-suite test-examples
   main-is:             Main.hs
   other-modules:
                        Test.Example
+                       Test.Tutorial
 
   build-depends:       base
                      , QuickCheck
