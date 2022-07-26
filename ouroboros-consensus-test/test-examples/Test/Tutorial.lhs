@@ -161,12 +161,48 @@ a `ValidationView` -- essentially a new block.  This could fail, producing a
 is used when the update is not expected to fail -- one example might be when it has
 been previously validated by calls to `updateChainDepState`
 
-Leader Selection: `IsLeader`, `CanBeLeader`
--------------------------------------------
+**TODO: explain why what SP's implementation means**
+
+Leader Selection: `IsLeader`, `CanBeLeader`, `checkIsLeader`
+------------------------------------------------------------
+
+**TODO: more about leadership conceptually somewhere?**
+**TODO: is leadership used anywhere else?**
+
+The type family `CanBeLeader` represents the ability for a particular node
+in the protocol to be a leader for a slot.  Put another way, a value of `CanBeLeader p` for a particular `p`
+witnesses the ability to be a leader in a particular context.
+
+In the same way, a value `IsLeader` witnesses the fact that a particular node is a leader for a slot.
+
+In `SP` both of these are simple singleton types but in more complex protocols
+they may contain cryptographic proof of the property witnessed by each.
+
+The `checkIsLeader` function uses these types in its determination of whether or not a node is a leader
+for a slot - returning `Nothing` if the node is not a slot leader or `Just (IsLeader p)`
+if it is.
+
+`SP` implements leadership by specifying, in the static `ProtocolConfig` for `SP`,
+a set of slots for which the particular node running the protocol is the leader.  `checkIsLeader`
+then looks up the slot number in this set and returns `Just SP_IsLeader` (aka `IsLeader SP`) if
+the node is configured to be a leader in this slot.
 
 
 The Security Parameter `k`: `protocolSecurityParam`
 ---------------------------------------------------
+
+`ConsensusProtocol` requires that its static configration --
+which is to say the associated `ConsensusConfig p` for a particular
+`ConsensusProtocol p` -- provide a security parameter (`SecurityParam`).
+This requirement is embodied in the `protocolSecurityParam` function.
+
+The `maxRollbacks` field on the `SecurityParam` record (often referred to as `k`)
+describes how many blocks can be rolled back - any number of blocks greater than
+this should be considered permanently part of the chain with respect to the protocol.
+
+**TODO: what does this affect?  chain selection?**
+
+In the case of `SP` we don't allow rollback at all.
 
 
 Further reading
