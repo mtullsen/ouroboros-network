@@ -99,7 +99,7 @@ necessary from a block header to help make this decision.
 
 The other half of this - which explains how a `SelectView` is derived from
 a particular block - is expressed by the block's implementation of the
- `Ouroboros.Consensus.Block.SupportsProtocol` typeclass.
+ `BlockSupportsProtocol` typeclass.
 
 The `preferCandidate` function in `Ouroboros.Consensus.Protocol.Abstract`
 demonstrates how this is used.
@@ -115,7 +115,12 @@ Ledger Integration: `LedgerView`
 --------------------------------
 
 Some decisions that a consensus protocol needs to make will depend
-on the ledger.  This dependency is expressed via `LedgerView`.
+on the ledger's `LedgerState`.  This dependency is expressed via `LedgerView`.
+Similar to `SelectView` the projection of `LedgerState` into `LedgerView` exists
+in a typeclass, namely `LedgerSupportsProtocol`.
+
+**TODO: there's some subtlety here wrt `LedgerView` and prediction that might
+be worth discussing.**
 
 For `SP` we do not require any information from the ledger to make
 decisions of any kind.  In the Praos protocol, the `LedgerView`
