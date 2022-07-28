@@ -30,14 +30,14 @@ First, some includes we'll need:
 The `ConsensusProtocol` typeclass
 =================================
 
-The central abstraction of @ouroborus-consensus@ is the `ConsensusProtocol`
+The central abstraction of `ouroborus-consensus` is the `ConsensusProtocol`
 typeclass.  This class captures the relationship between consensus and the
 rest of the system (in particular the ledger) as a set of type families.
 
 To demonstrate these relationships, we will begin by defining a simple
 protocol creatively named `SP`.
 
-First, we define the type of the protocol itself.  Tt is recommeded for this to
+First, we define the type of the protocol itself.  It is recommeded for this to
 be an empty type, since library functions will never have access to a value of this type.
 
 > data SP
@@ -169,7 +169,7 @@ a `ValidationView` -- essentially a new block.  This could fail, producing a
 is used when the update is not expected to fail -- one example might be when it has
 been previously validated by calls to `updateChainDepState`
 
-**TODO: explain why what SP's implementation means**
+**TODO: explain what SP's implementation means**
 
 Leader Selection: `IsLeader`, `CanBeLeader`, `checkIsLeader`
 ------------------------------------------------------------
