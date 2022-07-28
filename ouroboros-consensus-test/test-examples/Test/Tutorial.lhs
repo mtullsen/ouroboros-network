@@ -37,19 +37,17 @@ rest of the system (in particular the ledger) as a set of type families.
 To demonstrate these relationships, we will begin by defining a simple
 protocol creatively named `SP`.
 
-First, we define the type of the protocol itself.  As we will see,
-it is perfectly acceptable for this to be an empty type, since
-functions in the `ConsensusProtocol` class only refer to various
-type families that are declared as part of `ConsensusProtocol` itself.
+First, we define the type of the protocol itself.  Tt is recommeded for this to
+be an empty type, since library functions will never have access to a value of this type.
 
 > data SP
 
-The static configuration for `SP`` is defined by instantiating the
-`ConsensusConfig` class.  Some of the functions in `ConsensusConfig` such as
+The static configuration for `SP` is defined by defining an instance for the
+`ConsensusConfig` family.  Some of the functions in `ConsensusConfig` such as
 `checkAsLeader` require an associated `ConsensusConfig` so we define a simple one here:
 
 > data instance ConsensusConfig SP =
->  SP_Config  { cfgsp_iLeadInSlots :: Set SlotNo
+>  SP_Config  { cfgsp_slotsLeadByMe :: Set SlotNo
 >             }
 >             deriving NoThunks via OnlyCheckWhnfNamed "SP_Config" (ConsensusConfig SP)
 
@@ -68,7 +66,7 @@ Next, we instantiate the `ConsensusProtocol` for `SP`:
 >   type ValidationErr SP = Void
 >
 >   checkIsLeader cfg SP_CanBeLeader slot _tcds =
->       if slot `Set.member` cfgsp_iLeadInSlots cfg
+>       if slot `Set.member` cfgsp_slotsLeadByMe cfg
 >       then Just SP_IsLeader
 >       else Nothing
 >
@@ -97,7 +95,12 @@ Chain Selection: `SelectView`
 
 One of the major decisions when implementing a consenus protocol is encoding a
 policy for chain selection.  The `SelectView` type represents the information
-necessary from the ledger by the consensus protocol to help make this decision.
+necessary from a block header to help make this decision.
+
+The other half of this - which explains how a `SelectView` is derived from
+a particular block - is expressed by the block's implementation of the
+ `Ouroboros.Consensus.Block.SupportsProtocol` typeclass.
+
 The `preferCandidate` function in `Ouroboros.Consensus.Protocol.Abstract`
 demonstrates how this is used.
 
