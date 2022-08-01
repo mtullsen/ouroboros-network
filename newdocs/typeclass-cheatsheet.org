@@ -55,8 +55,8 @@ TYPE-CLASSES:
   
 - we are not distinguishing associated types from standalone type families.
   
-- To reduce the "noise", we are ignororing these type-class constraints:
-  - NoThunks, Eq, Show, etc.
+- To reduce the "noise", we are ignoring these type-class constraints:
+  - NoThunks, Eq, Show, ...
 
 - variable conventions:
   - when convenient, implicit conversions between type variables and type-functions applied to variables:
@@ -67,8 +67,9 @@ TYPE-CLASSES:
 
 * Semantic notes/footnotes
 
-- Note that 'b' (block) determines the 'l' ledger type.  Note 5.1.1 in [[CCASL:]] Nonetheless, a ledger can only be used with a single type of block, and consequently can only have a
-  single type of error; the only reason block application is defined separately is that a single type of block can be used with multiple ledgers (in other words, this is a 1-to-many relationship).
+- Note that 'b' (block) determines the 'l' ledger type.  Note 5.1.1 in [[CCASL:]] "Nonetheless, a ledger can only be used with a single
+  type of block, and consequently can only have a single type of error; the only reason block application is defined separately is
+  that a single type of block can be used with multiple ledgers (in other words, this is a 1-to-many relationship)."
 
 * TODO add these
 
