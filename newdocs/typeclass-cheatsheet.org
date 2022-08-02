@@ -29,10 +29,10 @@ TYPE-FAMILIES (with "KINDS"):
     p --(CanBeLeader   :: P->*)--> cbldr   -- evidence that we /can/ be leader
     p --(SelectView    :: P->*)--> selvw   -- projection of header used for chain selection (using `Ord selvw`); often `BlockNo`
     p --(ValidateView  :: P->*)--> valvw   -- projection of header used for header validation (not full block validation)  [[FN1]]
-    p --(LedgerView    :: P->*)--> ledvw   -- projection of the ledger state ('l') that consensus needs
-    p --(ValidationErr :: P->*)--> valerr  -- validation errors
+    p --(LedgerView    :: P->*)--> ledvw   -- projection of the ledger state (`l`) required by the protocol
+    p --(ValidationErr :: P->*)--> valerr  -- error when adding new header to `cds`
 
-                       s ───(Ticked :: *->*)───▶ s'   -- time related changes applied to some state (l, ledvw, cds)
+                       s ───(Ticked :: *->*)───▶ s'   -- time related changes applied to some state (`l`, `ledvw`, `cds`)
                                   
 TYPE-CLASSES:
 
