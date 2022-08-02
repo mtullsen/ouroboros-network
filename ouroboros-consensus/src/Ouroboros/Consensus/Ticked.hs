@@ -16,7 +16,7 @@ import           NoThunks.Class (NoThunks)
   Ticked state
 -------------------------------------------------------------------------------}
 
--- | " Ticked " piece of state ('LedgerState', 'LedgerView', 'ChainIndepState')
+-- | " Ticked " piece of state ('LedgerState', 'LedgerView', 'ChainDepState')
 --
 -- Ticking refers to the passage of time (the ticking of the clock). When a
 -- piece of state is marked as ticked, it means that time-related
