@@ -164,19 +164,20 @@ Protocol State: `tickChainDepState`, `updateChainDepState` and `reupdateChainDep
 These three functions model state transitions of values of type `ChainDepState`
 
 `tickChainDepState` computes a new `ChainDepState` from a prior state though
-a computation that models the (logical) passage of time.  **TODO: more about `Ticked`**
+a computation that models the (logical) passage of time.
+**TODO: more about `Ticked`** **:(MT) how about in pill-N**
 Unlike `updateChainDepState` this cannot fail under normal circumstances - if
 it could, that would mean there is some failure that is inevitable given
 the passage of time and if that is the case there would have been no reason
 not to throw such an error immediately.
 
-`updateChainDepState` computes a new `ChainDepState` from a prior state and
-a `ValidationView` -- essentially a new block.  This could fail, producing a
-`ValidationErr` instead of a `ChainDepState`
+`updateChainDepState` (a better name would be "applyHeader") computes a new `ChainDepState` from a prior state and
+the needed view of the header, `ValidateView p`.  This could fail, producing a
+`ValidationErr p` instead of a `ChainDepState p`
 
-`reupdateChainDepState` is a special case of `updateChainDepState` which
-is used when the update is not expected to fail -- one example might be when it has
-been previously validated by calls to `updateChainDepState`
+`reupdateChainDepState` is an optimization of `updateChainDepState` which
+is called when the header is known to be good (e.g., from a previous call to `updateChainDepState`)
+and the header check is unneeded.
 
 **TODO: explain what SP's implementation means**
 
@@ -193,7 +194,7 @@ witnesses the ability to be a leader in a particular context.
 In the same way, a value `IsLeader` witnesses the fact that a particular node is a leader for a slot.
 
 In `SP` both of these are simple singleton types but in more complex protocols
-the may contain cryptographic proof of the property witnessed by each.
+they may contain cryptographic proof of the property witnessed by each.
 
 The `checkIsLeader` function uses these types in its determination of whether or not a node is a leader
 for a slot - returning `Nothing` if the node is not a slot leader or `Just (IsLeader p)`
@@ -221,7 +222,7 @@ The `maxRollbacks` field on the `SecurityParam` record (often referred to as `k`
 describes how many blocks can be rolled back - any number of blocks greater than
 this should be considered permanently part of the chain with respect to the protocol.
 
-**TODO: what does this affect?  chain selection?** **MT: absolutely.**
+**TODO: what does this affect?  chain selection?** **MT: absolutely, :-)**
 
 In the case of `SP` we don't allow rollback at all.
 
