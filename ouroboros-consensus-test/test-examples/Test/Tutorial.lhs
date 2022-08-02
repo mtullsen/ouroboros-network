@@ -37,17 +37,17 @@ rest of the system (in particular the ledger) as a set of type families.
 To demonstrate these relationships, we will begin by defining a simple
 protocol creatively named `SP`.
 
-First, we define the type of the protocol itself.  It is recommeded for this to
-be an empty type, since library functions will never have access to a value of this type.
+First, we define the type of the protocol itself.  This is a type-level "tag", this does not exist
+at the value level.
 
 > data SP
 
 The static configuration for `SP` is defined by defining an instance for the
-`ConsensusConfig` family.  Some of the functions in `ConsensusConfig` such as
-`checkAsLeader` require an associated `ConsensusConfig` so we define a simple one here:
+`ConsensusConfig` type family.  Some of the methods in `ConsensusProtocol` class such as
+`checkIsLeader` require an associated `ConsensusConfig p` so we define a simple one here:
 
 > data instance ConsensusConfig SP =
->  SP_Config  { cfgsp_slotsLeadByMe :: Set SlotNo
+>  SP_Config  { cfgsp_slotsLedByMe :: Set SlotNo
 >             }
 >             deriving NoThunks via OnlyCheckWhnfNamed "SP_Config" (ConsensusConfig SP)
 
@@ -66,7 +66,7 @@ Next, we instantiate the `ConsensusProtocol` for `SP`:
 >   type ValidationErr SP = Void
 >
 >   checkIsLeader cfg SP_CanBeLeader slot _tcds =
->       if slot `Set.member` cfgsp_slotsLeadByMe cfg
+>       if slot `Set.member` cfgsp_slotsLedByMe cfg
 >       then Just SP_IsLeader
 >       else Nothing
 >
@@ -94,7 +94,7 @@ Chain Selection: `SelectView`
 -----------------------------
 
 One of the major decisions when implementing a consenus protocol is encoding a
-policy for chain selection.  The `SelectView` type represents the information
+policy for chain selection.  The `SelectView SP` type represents the information
 necessary from a block header to help make this decision.
 
 The other half of this - which explains how a `SelectView` is derived from
@@ -104,20 +104,22 @@ a particular block - is expressed by the block's implementation of the
 The `preferCandidate` function in `Ouroboros.Consensus.Protocol.Abstract`
 demonstrates how this is used.
 
-Note that instantiations of `ConsensusProtocol` for some type `T`
-consequently require `Ord (SelectView T)`.
+Note that instantiations of `ConsensusProtocol` for some protocol `p`
+consequently require `Ord (SelectView p)`.
 
 For `SP` we will use only `BlockNo` - to implement the simplest
-rule of perferring longer chains to shorter chains.
+rule of preferring longer chains to shorter chains.
 
 
 Ledger Integration: `LedgerView`
 --------------------------------
 
 Some decisions that a consensus protocol needs to make will depend
-on the ledger's `LedgerState`.  This dependency is expressed via `LedgerView`.
-Similar to `SelectView` the projection of `LedgerState` into `LedgerView` exists
+on the ledger's state, `LedgerState blk`.  The data required from the ledger
+is of type `LedgerView p` (i.e., the protocol determines what is needed).
+Similar to `SelectView` the projection of `LedgerState blk` into `LedgerView p` exists
 in a typeclass, namely `LedgerSupportsProtocol`.
+
 
 **TODO: there's some subtlety here wrt `LedgerView` and prediction that might
 be worth discussing.**
@@ -133,10 +135,17 @@ Notably, this is used in the `tickChainDepState` function elsewhere in the
 Protocol State: `ChainDepState`, `ValidateView` and `ValidationErr`
 ----------------------------------------------------------------
 
-`ChainDepState` describes a logical state that summarizes a chain.
+`ChainDepState` describes the state of the protocol that evolves with the chain.
+Note, from [Cardano Consensus and Storage Layer]: ``we are referring to this as
+the “chain dependent state” to emphasise that this is state that evolves with
+the chain, and indeed is subjec to rollback when we switch to alternatives
+forks. This distinguishes it from chain independent state such as evolving
+private keys, which are updated independently from blocks and are not subject to
+rollback.''
 
-`ValidateView` is a 'view' of a block providing enough information to update
-the state.  It is called `ValidateView` because the functions used to
+`ValidateView` is a 'view' of a block (header) providing enough information to validate
+the block header.
+It is called `ValidateView` because the functions used to
 compute new states from some combination of a prior `ChainDepState`
 and a `ValidateView` can _fail_ - producing a `ValidationErr`.
 
@@ -146,7 +155,7 @@ particular the fact that `ConsensusProtocol` instances are sometimes called
 upon to do _prediction_ rather than just as a pure summary of history - and
 as such may not be able to witness a chain in its entirety.
 
-For more details, see the definition of `ConsensusProtocol`
+For more details, see the definition of `ConsensusProtocol`.
 
 
 Protocol State: `tickChainDepState`, `updateChainDepState` and `reupdateChainDepState`
@@ -184,7 +193,7 @@ witnesses the ability to be a leader in a particular context.
 In the same way, a value `IsLeader` witnesses the fact that a particular node is a leader for a slot.
 
 In `SP` both of these are simple singleton types but in more complex protocols
-they may contain cryptographic proof of the property witnessed by each.
+the may contain cryptographic proof of the property witnessed by each.
 
 The `checkIsLeader` function uses these types in its determination of whether or not a node is a leader
 for a slot - returning `Nothing` if the node is not a slot leader or `Just (IsLeader p)`
@@ -199,18 +208,23 @@ the node is configured to be a leader in this slot.
 The Security Parameter `k`: `protocolSecurityParam`
 ---------------------------------------------------
 
-`ConsensusProtocol` requires that its static configration --
+`ConsensusProtocol` requires that its static configuration --
 which is to say the associated `ConsensusConfig p` for a particular
 `ConsensusProtocol p` -- provide a security parameter (`SecurityParam`).
-This requirement is embodied in the `protocolSecurityParam` function.
+This requirement is embodied in the `protocolSecurityParam` method.
+
+Although the security parameter does appear to be constant for all current
+protocols, the fact that it is read from the `ConsensusConfig p` allows it to
+change for testing purposes.
 
 The `maxRollbacks` field on the `SecurityParam` record (often referred to as `k`)
 describes how many blocks can be rolled back - any number of blocks greater than
 this should be considered permanently part of the chain with respect to the protocol.
 
-**TODO: what does this affect?  chain selection?**
+**TODO: what does this affect?  chain selection?** **MT: absolutely.**
 
 In the case of `SP` we don't allow rollback at all.
+
 
 
 Further reading
@@ -218,7 +232,7 @@ Further reading
 
 The `ConsensusProtocol` class is also dealt with in some detail
 and with additional context in the
-[Cardano Consenus and Storage Layer](https://hydra.iohk.io/build/15874054/download/1/report.pdf) report.
+[Cardano Consensus and Storage Layer](https://hydra.iohk.io/build/15874054/download/1/report.pdf) report.
 
 The `Ouroboros.Consensus.Protocol.Praos` module contains the
 instantiation of `ConsensusProtocol` for Praos.
