@@ -99,7 +99,7 @@ necessary from a block header to help make this decision.
 
 The other half of this - which explains how a `SelectView` is derived from
 a particular block - is expressed by the block's implementation of the
- `BlockSupportsProtocol` typeclass.
+ `BlockSupportsProtocol` typeclass.  (See pill N.) **:FIXME**
 
 The `preferCandidate` function in `Ouroboros.Consensus.Protocol.Abstract`
 demonstrates how this is used.

@@ -1,6 +1,6 @@
 * The CheatSheet [view fixed-font, at least 132 chars wide]
 
-TYPE-FAMILIES (with "KINDS"):  
+TYPE-FAMILIES (with the implicit "kinds"):  
 
    P[rotocol]                         B[lock]                       L[edger]                     -- P,B,L "kinds"
   ===                                ===                           ===
@@ -10,19 +10,16 @@ TYPE-FAMILIES (with "KINDS"):
    p  ──(ConsensusConfig :: P->*)────────────────────────────────────────────────────────────▶ cc  | data   |
                                                                                                    +--------+
 
-                                      b --(CodecConfig   :: B->*)------> cc  -- for serialisation and deserialisation
-                                      b --(StorageConfig :: B->*)------> sc  -- other config [?]
-                                      
-                                      b --(Header        :: B->*)------> hdr -- link block to header
+                                      b --(CodecConfig   :: B->*)------> codecc -- for serialisation and deserialisation
+                                      b --(StorageConfig :: B->*)------> sc     -- other config [?]
+                                      b --(Header        :: B->*)------> hdr    -- link block to its header
 
-                                      b ------------------- (GenTx :: B->*)---> tx
-                                      
-                                      b ──(LedgerState :: B->L)──▶ l ──(AuxLedgerEvent :: L->*)──▶ lev   -- ??
-                                                                   l ──(LedgerCfg :: L->*)───────▶ lc    -- static config
-                                                                   l ──(LedgerErr :: L->*)───────▶ lerr  -- errors when updating ledger
+                                      b ──(LedgerState :: B->L)───▶ l ──(AuxLedgerEvent :: L->*)──▶ lev   -- ??
+                                                                    l ──(LedgerCfg :: L->*)───────▶ lc    -- static config
+                                                                    l ──(LedgerErr :: L->*)───────▶ lerr  -- errors when updating ledger
                                                                    
-                                      b ───────────(LedgerConfig :: B->*)────────────────────────▶ lc    -- type syn for ^
-                                      b ───────────(LedgerError  :: B->*)────────────────────────▶ lerr  -- type syn for ^
+                                      b ───────────(LedgerConfig :: B->*)─────────────────────────▶ lc    -- type syn. for ^
+                                      b ───────────(LedgerError  :: B->*)─────────────────────────▶ lerr  -- type syn. for ^
 
     p --(ChainDepState :: P->*)--> cds     -- protocol specific state (part that depends on the chain), may rollback
     p --(IsLeader      :: P->*)--> isldr   -- evidence that a node /is/ the leader
@@ -43,12 +40,6 @@ TYPE-CLASSES:
    reupdateChainDepState :: cc -> valvw -> SlotNo -> Ticked cds -> cds               -- re-apply header to cds [no error]
    protocolSecurityParam :: cc -> SecurityParam                                      -- get security parameter 'k'
 
-   
-                              class (GetPrevHash b, ConsensusProtocol p) => BlockSupportsProtocol b where   -- [[FN2]]
-                                validateView :: bc -> Header b -> ValidateView p  -- project from hdr for hdr validation, [[FN1]]
-                                selectView   :: bc -> Header b -> SelectView p    -- project from hdr for chain selection
-                                    
-
                               class (StandardHash b, Typeable b) => HasHeader b where -- abstract over block headers
                                 getHeaderFields :: b -> HeaderFields b    -- i.e., slot, blockno, hash
 
@@ -61,16 +52,22 @@ TYPE-CLASSES:
                                                 class (GetTip l, GetTip (Ticked l)) => IsLedger l where
                                                   applyChainTickLedgerResult :: lc → SlotNo → l → LedgerResult l (Ticked l)
 
+                              -- BlockSupportsProtocol b - can we construct the views on block `b` required by protocol `p`
+                              class (GetPrevHash b, ConsensusProtocol p) => BlockSupportsProtocol b where   -- [[FN2]]
+                                validateView :: bc -> Header b -> ValidateView p  -- project from hdr for hdr validation, [[FN1]]
+                                selectView   :: bc -> Header b -> SelectView p    -- project from hdr for chain selection
+                                    
   class (IsLedger l, HeaderHash l ~ HeaderHash b, HasHeader b, HasHeader (Header b)) => ApplyBlock l b where
     applyBlockLedgerResult   :: lc -> b -> Ticked l -> Except (LedgerErr l) (LedgerResult l l)
     reapplyBlockLedgerResult :: lc -> b -> Ticked l -> LedgerResult l l
     
-  class ApplyBlock (LedgerState b) b => UpdateLedger b where {}
+  class ApplyBlock (LedgerState b) b => UpdateLedger b where
+    {}
 
   -- | Link protocol to ledger
   class (BlockSupportsProtocol b, UpdateLedger b, ValidateEnvelope b) => LedgerSupportsProtocol b where
-    protocolLedgerView   :: lc -> Ticked l -> Ticked (LedgerView (BlockProtocol b))
-    ledgerViewForecastAt :: lc -> l -> Forecast (LedgerView (BlockProtocol b))
+    protocolLedgerView   :: lc -> Ticked l -> Ticked ledvw   -- `ledvw` (`LedgerView (BlockProtocol b)`) extracted from the ledger
+    ledgerViewForecastAt :: lc -> l -> Forecast ledvw        -- Get a forecast at the given ledger state.
       
                                                   
 * Networking code: some basic definitions
@@ -152,10 +149,18 @@ blockNo = headerFieldBlockNo . getHeaderFields
 - TODO can you distinguish associated types without the diagram getting *too* busy?
   
 - add other key type families
-  : Validated
-  - in **.Ledger.Abstract
-  ?
-- be consistent: ascii vs unicode arrows & etc
+  - =Validated= in **.Ledger.Abstract
+  - and
+    : b ------------------- (GenTx :: B->*)---> tx  -- generalized transactions
+    ...?
+    
+- other key types?
+  =LedgerSupportsMempool blk=
+  
+- rendering 
+  - be consistent: ascii vs unicode arrows & etc
+  - group the classes with gray borders
+  - ?
     
 - make note of the *few* type constructors in the above signatures
   - or put into a separate font?
