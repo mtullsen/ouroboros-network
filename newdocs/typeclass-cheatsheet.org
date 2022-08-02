@@ -2,24 +2,24 @@
 
 TYPE-FAMILIES (with the implicit "kinds"):  
 
-   P[rotocol]                         B[lock]                       L[edger]                     -- P,B,L "kinds"
-  ===                                ===                           ===
-                                                                                                   +--------+
-   p  ◀──(BlockProtocol :: B->P)───── b ──(LedgerState :: B->L)───▶ l ──(LedgerCfg :: L->*)──▶ lc  | static |
-                                      b ──(BlockConfig :: B->*)──────────────────────────────▶ bc  | config |
-   p  ──(ConsensusConfig :: P->*)────────────────────────────────────────────────────────────▶ cc  | data   |
-                                                                                                   +--------+
+   P[rotocol]                       B[lock]                       L[edger]                     -- P,B,L "kinds"
+  ===                              ===                           ===
+                                                                                                     +--------+
+   p  ──(ConsensusConfig :: P->*)──────────────────────────────────────────────────────────────▶ cc  | static |
+   p  ◀──(BlockProtocol :: B->P)─── b ──(BlockConfig :: B->*)──────────────────────────────────▶ bc  | config |
+                                    b ──(LedgerState :: B->L)──▶ l ──(LedgerCfg :: L->*)───────▶ lc  | data   |
+                                                                                                     +--------+
+                                    
+                                    b ──(LedgerState :: B->L)──▶ l ──(AuxLedgerEvent :: L->*)──▶ lev   -- ??
+                                                                 l ──(LedgerErr :: L->*)───────▶ lerr  -- errors when updating ledger
+                                    b ───────────(LedgerConfig :: B->*)────────────────────────▶ lc    -- type syn. for ...
+                                    b ───────────(LedgerError  :: B->*)────────────────────────▶ lerr  -- type syn. for ...
 
-                                      b --(CodecConfig   :: B->*)------> codecc -- for serialisation and deserialisation
-                                      b --(StorageConfig :: B->*)------> sc     -- other config [?]
-                                      b --(Header        :: B->*)------> hdr    -- link block to its header
 
-                                      b ──(LedgerState :: B->L)───▶ l ──(AuxLedgerEvent :: L->*)──▶ lev   -- ??
-                                                                    l ──(LedgerCfg :: L->*)───────▶ lc    -- static config
-                                                                    l ──(LedgerErr :: L->*)───────▶ lerr  -- errors when updating ledger
-                                                                   
-                                      b ───────────(LedgerConfig :: B->*)─────────────────────────▶ lc    -- type syn. for ^
-                                      b ───────────(LedgerError  :: B->*)─────────────────────────▶ lerr  -- type syn. for ^
+                                    b --(CodecConfig   :: B->*)------> codecc -- for serialisation and deserialisation
+                                    b --(StorageConfig :: B->*)------> sc     -- other config [?]
+                                    b --(Header        :: B->*)------> hdr    -- link block to its header
+
 
     p --(ChainDepState :: P->*)--> cds     -- protocol specific state (part that depends on the chain), may rollback
     p --(IsLeader      :: P->*)--> isldr   -- evidence that a node /is/ the leader
