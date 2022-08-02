@@ -10,7 +10,6 @@ TYPE-FAMILIES (with "KINDS"):
    p  ──(ConsensusConfig :: P->*)────────────────────────────────────────────────────────────▶ cc  | data   |
                                                                                                    +--------+
 
-                                                                                                     
                                       b --(CodecConfig   :: B->*)------> cc  -- for serialisation and deserialisation
                                       b --(StorageConfig :: B->*)------> sc  -- other config [?]
                                       
@@ -18,7 +17,7 @@ TYPE-FAMILIES (with "KINDS"):
 
                                       b ------------------- (GenTx :: B->*)---> tx
                                       
-                                      b ──(LedgerState :: B->L)──▶ l ──(AuxLedgerEvent :: L->*)──▶ lev
+                                      b ──(LedgerState :: B->L)──▶ l ──(AuxLedgerEvent :: L->*)──▶ lev   -- ??
                                                                    l ──(LedgerCfg :: L->*)───────▶ lc    -- static config
                                                                    l ──(LedgerErr :: L->*)───────▶ lerr  -- errors when updating ledger
                                                                    
@@ -130,7 +129,12 @@ blockNo = headerFieldBlockNo . getHeaderFields
      p  <==> BlockProtocol b
      cds <==> ChainDepState p
      ...
-
+     
+  - confusing or helpful?
+    - given 'b' everything else is determined, so no ambiguity
+    - wantinng to ignore issues of type inference
+    - naming of "applications" may give intuition and does make more concise
+    
 * Semantic notes/footnotes
 
 - <<FN1>> As a consequence of the header/block split, we want to validate the header as soon as the chain sync client acquires the
@@ -143,11 +147,16 @@ blockNo = headerFieldBlockNo . getHeaderFields
   type of block, and consequently can only have a single type of error; the only reason block application is defined separately is
   that a single type of block can be used with multiple ledgers (in other words, this is a 1-to-many relationship)."
 
-* TODO add these
+* TODO improvements/adds
 
-- other key type families
-- see ... in **.Ledger.Abstract
-- be consistent: ascii vs unicode arrows & etc
-      
 - TODO can you distinguish associated types without the diagram getting *too* busy?
+  
+- add other key type families
+  : Validated
+  - in **.Ledger.Abstract
+  ?
+- be consistent: ascii vs unicode arrows & etc
+    
+- make note of the *few* type constructors in the above signatures
+  - or put into a separate font?
   
