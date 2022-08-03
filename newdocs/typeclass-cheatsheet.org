@@ -1,4 +1,4 @@
-* The CheatSheet [view fixed-font, at least 132 chars wide]
+* The CheatSheet [view fixed-font, at least 134 chars wide]
 
 TYPE-FAMILIES (with the implicit "kinds"):  
 
@@ -10,7 +10,7 @@ TYPE-FAMILIES (with the implicit "kinds"):
                                     b ──(LedgerState :: B->L)──▶ l ──(LedgerCfg :: L->*)───────▶ lc  | data   |
                                                                                                      +--------+
                                     
-                                    b ──(LedgerState :: B->L)──▶ l ──(AuxLedgerEvent :: L->*)──▶ lev   -- ??
+                                    b ──(LedgerState :: B->L)──▶ l ──(AuxLedgerEvent :: L->*)──▶ lev   -- events emitted by ledger
                                                                  l ──(LedgerErr :: L->*)───────▶ lerr  -- errors when updating ledger
                                     b ───────────(LedgerConfig :: B->*)────────────────────────▶ lc    -- type syn. for ...
                                     b ───────────(LedgerError  :: B->*)────────────────────────▶ lerr  -- type syn. for ...
@@ -53,12 +53,12 @@ TYPE-CLASSES:
                                                   applyChainTickLedgerResult :: lc → SlotNo → l → LedgerResult l (Ticked l)
 
                               -- BlockSupportsProtocol b - can we construct the views on block `b` required by protocol `p`
-                              class (GetPrevHash b, ConsensusProtocol p) => BlockSupportsProtocol b where   -- [[FN2]]
+                              class (GetPrevHash b, ConsensusProtocol p) => BlockSupportsProtocol b where              -- [[FN2]]
                                 validateView :: bc -> Header b -> ValidateView p  -- project from hdr for hdr validation, [[FN1]]
                                 selectView   :: bc -> Header b -> SelectView p    -- project from hdr for chain selection
                                     
   class (IsLedger l, HeaderHash l ~ HeaderHash b, HasHeader b, HasHeader (Header b)) => ApplyBlock l b where
-    applyBlockLedgerResult   :: lc -> b -> Ticked l -> Except (LedgerErr l) (LedgerResult l l)
+    applyBlockLedgerResult   :: lc -> b -> Ticked l -> Except (LedgerErr l) (LedgerResult l l)  
     reapplyBlockLedgerResult :: lc -> b -> Ticked l -> LedgerResult l l
     
   class ApplyBlock (LedgerState b) b => UpdateLedger b where
@@ -139,7 +139,9 @@ blockNo = headerFieldBlockNo . getHeaderFields
   the `validateView` method is called.
   
 - <<FN2>> Appears that `GetHeader b` is redundant in BlockSupportsProtocol class.
-    
+
+- <<FN3>> Regarding 'lev': note that `LedgerResult l l` includes 'lev'
+  
 - Note that 'b' (block) determines the 'l' ledger type.  Note 5.1.1 in [[CCASL:]] "Nonetheless, a ledger can only be used with a single
   type of block, and consequently can only have a single type of error; the only reason block application is defined separately is
   that a single type of block can be used with multiple ledgers (in other words, this is a 1-to-many relationship)."
@@ -153,6 +155,9 @@ blockNo = headerFieldBlockNo . getHeaderFields
   - and
     : b ------------------- (GenTx :: B->*)---> tx  -- generalized transactions
     ...?
+
+    -- 'generalized transactions'?  so what is a non generalized tx?
+        NF: possibly an utxo.
     
 - other key types?
   =LedgerSupportsMempool blk=

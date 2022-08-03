@@ -87,6 +87,7 @@ Finally we define a few extra things used in this instantiation:
 >
 > k :: SecurityParam
 > k = SecurityParam {maxRollbacks= 0}
+>  -- FIXME: k=0 is degenerate (results in much dead code), 1 is interesting.
 
 Let's examine each of these in turn:
 
@@ -214,9 +215,9 @@ which is to say the associated `ConsensusConfig p` for a particular
 `ConsensusProtocol p` -- provide a security parameter (`SecurityParam`).
 This requirement is embodied in the `protocolSecurityParam` method.
 
-Although the security parameter does appear to be constant for all current
-protocols, the fact that it is read from the `ConsensusConfig p` allows it to
-change for testing purposes.
+For all known/current protocols, the security parameter is fixed for each
+blockchain (a protocol could be instantiated with different k's, but it should
+be configured the same for each node in that blockchain).
 
 The `maxRollbacks` field on the `SecurityParam` record (often referred to as `k`)
 describes how many blocks can be rolled back - any number of blocks greater than
