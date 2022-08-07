@@ -2,7 +2,7 @@
 
 TYPE-FAMILIES (with the implicit "kinds"):  
 
-   P[rotocol]                       B[lock]                       L[edger]                     -- P,B,L "kinds"
+   P[rotocol]                       B[lock]                       L[edger]                     <- the P,B,L "kinds"
   ===                              ===                           ===
                                                                                                      +--------+
    p  ──(ConsensusConfig :: P->*)──────────────────────────────────────────────────────────────▶ cc  | static |
@@ -26,18 +26,18 @@ TYPE-FAMILIES (with the implicit "kinds"):
     p --(CanBeLeader   :: P->*)--> cbldr   -- evidence that we /can/ be leader
     p --(SelectView    :: P->*)--> selvw   -- projection of header used for chain selection (using `Ord selvw`); often `BlockNo`
     p --(ValidateView  :: P->*)--> valvw   -- projection of header used for header validation (not full block validation)  [[FN1]]
-    p --(LedgerView    :: P->*)--> ledvw   -- projection of the ledger state (`l`) required by the protocol
-    p --(ValidationErr :: P->*)--> valerr  -- error when adding new header to `cds`
+    p --(LedgerView    :: P->*)--> ledvw   -- projection of the ledger state (`l`) that is required by the protocol
+    p --(ValidationErr :: P->*)--> valerr  -- the error result when failing to add new header to `cds`
 
                        s ───(Ticked :: *->*)───▶ s'   -- time related changes applied to some state (`l`, `ledvw`, `cds`)
                                   
 TYPE-CLASSES:
 
  class Ord (SelectView p) => ConsensusProtocol p where
-   checkIsLeader         :: cc -> cbldr -> SlotNo -> Ticked cds -> Maybe isldr       -- if we lead this slot, 'Just evidence'
-   tickChainDepState     :: cc -> Ticked ledvw -> SlotNo -> cds -> Ticked cds        -- tick the cds to the SlotNo
-   updateChainDepState   :: cc -> valvw -> SlotNo -> Ticked cds -> Except valerr cds -- apply header to cds [may error]
-   reupdateChainDepState :: cc -> valvw -> SlotNo -> Ticked cds -> cds               -- re-apply header to cds [no error]
+   checkIsLeader         :: cc -> cbldr -> SlotNo -> Ticked cds -> Maybe isldr       -- `Just evidence` when we lead this slot
+   tickChainDepState     :: cc -> Ticked ledvw -> SlotNo -> cds -> Ticked cds        -- tick the `cds` to the SlotNo
+   updateChainDepState   :: cc -> valvw -> SlotNo -> Ticked cds -> Except valerr cds -- apply header to `cds` (may error)
+   reupdateChainDepState :: cc -> valvw -> SlotNo -> Ticked cds -> cds               -- re-apply header to `cds` (never errors)
    protocolSecurityParam :: cc -> SecurityParam                                      -- get security parameter 'k'
 
                               class (StandardHash b, Typeable b) => HasHeader b where -- abstract over block headers
