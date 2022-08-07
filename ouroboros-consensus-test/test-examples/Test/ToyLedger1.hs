@@ -5,7 +5,7 @@
 {-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE DeriveAnyClass             #-}
 
-module Test.Example where
+module Test.ToyLedger1 where
 
 -- base pkgs:
 import           Data.Set (Set)
@@ -14,8 +14,8 @@ import           Data.Void
 import           GHC.Generics (Generic)
 
 -- pkgs tasty*:
-import           Test.Tasty
-import           Test.Tasty.QuickCheck
+-- import           Test.Tasty
+-- import           Test.Tasty.QuickCheck
 
 -- pkg nothunks:
 import           NoThunks.Class (NoThunks, OnlyCheckWhnfNamed (..))
@@ -34,6 +34,7 @@ import           Ouroboros.Consensus.Ledger.SupportsMempool (GenTx)
 -- local modules:
 import           Test.Utilities
 
+
 ---- Define Protocol 'SP' - Simplest Protocol --------------------------------
 
 data SP             -- The Simplest Protocol
@@ -42,8 +43,7 @@ data SP_CanBeLeader = SP_CanBeLeader -- Evidence that we /can/ be a leader
 data SP_IsLeader    = SP_IsLeader    -- Evidence that we /are/ leader
 
 data instance ConsensusConfig SP =
-  SP_Config { cfgsp_iLeadInSlots  :: Set SlotNo
-            , cfgsp_securityParam :: SecurityParam
+  SP_Config { cfgsp_iLeadInSlots :: Set SlotNo
             }
   deriving NoThunks via OnlyCheckWhnfNamed "SP_Config" (ConsensusConfig SP)
 
@@ -80,22 +80,12 @@ instance ConsensusProtocol SP where
   
   reupdateChainDepState _ _ _ _ = ()
 
+  -- NF: TODO: look at Shelley instance of ^
 
-sp_config :: ConsensusConfig SP
-sp_config = SP_Config
-              { cfgsp_iLeadInSlots = Set.empty -- never a leader, FIXME
-              , cfgsp_securityParam= SecurityParam{maxRollbacks= 1}
-              }
+k :: SecurityParam
+k = SecurityParam {maxRollbacks= 1}
 
----- Trivial Block (for the SP protocol) -------------------------------------
---
---   see 4.3 in [CCASL]
---
---   borrowing from
---    - https://iohk.io/en/blog/posts/2020/05/28/the-abstract-nature-of-the-consensus-layer/
---        which references 'MiniConsensus.hs'
-
---    - ouroboros-consensus-test/test-consensus/Test/Consensus/HardFork/Combinator/A.hs & B.hs
+---- Trivial Block -----------------------------------------------------------
 
 -- | Map the block to a consensus protocol
 type instance BlockProtocol TrivBlock = SP
@@ -190,4 +180,5 @@ data instance GenTx Block2 = Tx2 { txName :: String }
 
 exaBlock2 = Block2
               -- , tb_body  = [TxA "tx1", TxA "tx2"]
+
 
