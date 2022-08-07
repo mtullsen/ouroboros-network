@@ -30,163 +30,151 @@ import           Ouroboros.Consensus.Ledger.SupportsMempool (GenTx)
 -- local modules:
 import           Test.Utilities
 
----- Define Protocol 'SP' - Simplest Protocol --------------------------------
+---- Define Protocol B : 'PrtclB' --------------------------------------------
 
-data SP             -- The Simplest Protocol
+data PrtclB             -- TODO:_
 
-data SP_CanBeLeader = SP_CanBeLeader -- Evidence that we /can/ be a leader
-data SP_IsLeader    = SP_IsLeader    -- Evidence that we /are/ leader
+data PrtclB_CanBeLeader = PrtclB_CanBeLeader -- Evidence we /can/ be a leader
+data PrtclB_IsLeader    = PrtclB_IsLeader    -- Evidence we /are/ leader
 
-data instance ConsensusConfig SP =
-  SP_Config { cfgsp_iLeadInSlots  :: Set SlotNo
+data instance ConsensusConfig PrtclB =
+  PrtclB_Config { cfgsp_iLeadInSlots  :: Set SlotNo
             , cfgsp_securityParam :: SecurityParam
             }
   deriving (Eq, Show)
-  deriving NoThunks via OnlyCheckWhnfNamed "SP_Config" (ConsensusConfig SP)
+  deriving NoThunks via OnlyCheckWhnfNamed "PrtclB_Config"
+                        (ConsensusConfig PrtclB)
 
 
-instance ConsensusProtocol SP where
+instance ConsensusProtocol PrtclB where
   
-  type ChainDepState SP = ()
-  type IsLeader      SP = SP_IsLeader
-  type CanBeLeader   SP = SP_CanBeLeader
+  type ChainDepState PrtclB = ()
+  type IsLeader      PrtclB = PrtclB_IsLeader
+  type CanBeLeader   PrtclB = PrtclB_CanBeLeader
   
   -- | View on a block header required for chain selection.
   --   Here, BlockNo is sufficient (also the default):
-  type SelectView    SP = BlockNo
+  type SelectView    PrtclB = BlockNo
 
   -- | View on the ledger required by the protocol
-  type LedgerView    SP = ()
+  type LedgerView    PrtclB = ()
   
   -- | View on a block header required for header validation
-  type ValidateView  SP = ()              
+  type ValidateView  PrtclB = ()              
   
-  type ValidationErr SP = Void
+  type ValidationErr PrtclB = Void
 
-  checkIsLeader cfg SP_CanBeLeader slot _tcds =
+  checkIsLeader cfg PrtclB_CanBeLeader slot _tcds =
       if slot `Set.member` cfgsp_iLeadInSlots cfg
-      then Just SP_IsLeader
+      then Just PrtclB_IsLeader
       else Nothing
 
   protocolSecurityParam = cfgsp_securityParam
 
   tickChainDepState     _ _ _ _ = TickedTrivial
-                                  -- works b/c ChainDepState SP = ()
+                                  -- works b/c ChainDepState PrtclB = ()
                                   
   updateChainDepState   _ _ _ _ = return ()
   
   reupdateChainDepState _ _ _ _ = ()
 
 
-sp_config :: ConsensusConfig SP
-sp_config = SP_Config
+sp_config :: ConsensusConfig PrtclB
+sp_config = PrtclB_Config
               { cfgsp_iLeadInSlots = Set.empty -- never a leader, FIXME
               , cfgsp_securityParam= SecurityParam{maxRollbacks= 1}
               }
 
----- Trivial Block (for the SP protocol) -------------------------------------
---
---   see 4.3 in [CCASL]
---
---   borrowing from
---    - https://iohk.io/en/blog/posts/2020/05/28/the-abstract-nature-of-the-consensus-layer/
---        which references 'MiniConsensus.hs'
+---- Block B (for Protocol B) ------------------------------------------------
 
---    - ouroboros-consensus-test/test-consensus/Test/Consensus/HardFork/Combinator/A.hs & B.hs
+-- | Map the block to the consensus protocol PrtclB
+type instance BlockProtocol BlockB = PrtclB
 
--- | Map the block to a consensus protocol
-type instance BlockProtocol TrivBlock = SP
+-- | Define BlockB
+data BlockB = BlockB { bb_header :: Header BlockB
+                     }
+  deriving NoThunks via OnlyCheckWhnfNamed "BlockB" BlockB
 
--- | Define TrivBlock
-data TrivBlock = TrivBlock
-                   { tb_header :: Header TrivBlock
-                   }
-  deriving NoThunks via OnlyCheckWhnfNamed "TrivBlock" TrivBlock
+  -- BlockB has no tx's, nothing but a header
 
-  -- TrivBlock has no tx's, nothing but a header
-
-data instance Header TrivBlock =
-  HdrTB
+-- | the minimum header:
+data instance Header BlockB =
+  HdrBlockB
     { htb_SlotNo  :: SlotNo
     , htb_BlockNo :: BlockNo
-    , htb_Hash    :: HeaderHash TrivBlock
-    , htb_prev    :: ChainHash TrivBlock
+    , htb_Hash    :: HeaderHash BlockB
+    , htb_prev    :: ChainHash BlockB
     }
   deriving stock    (Show, Eq, Generic)
   deriving anyclass (Serialise)
-  deriving NoThunks via OnlyCheckWhnfNamed "HdrTB" (Header TrivBlock)
+  deriving NoThunks via OnlyCheckWhnfNamed "HdrBlockB" (Header BlockB)
 
 
-instance BlockSupportsProtocol TrivBlock where
+instance BlockSupportsProtocol BlockB where
   validateView _ _ = ()
   -- selectView   = stub
   -- this method defaulted.  (MT-TODO: understand.)
   -- TODO: do we want to use the defalt method in some/all of our pills?
 
-instance GetHeader TrivBlock where
-  getHeader          = tb_header
+instance GetHeader BlockB where
+  getHeader          = bb_header
   blockMatchesHeader = \_ _ -> True -- We are not interested in integrity here
   headerIsEBB        = const Nothing
 
-instance GetPrevHash TrivBlock where
+instance GetPrevHash BlockB where
   headerPrevHash = htb_prev
 
-instance HasHeader TrivBlock where
+instance HasHeader BlockB where
   getHeaderFields = castHeaderFields       -- worth some commentary?
                   . getHeaderFields
-                  . tb_header
+                  . bb_header
                     
-instance HasHeader (Header TrivBlock) where
+instance HasHeader (Header BlockB) where
   getHeaderFields hdr = HeaderFields
                           { headerFieldSlot   = htb_SlotNo hdr
                           , headerFieldBlockNo= htb_BlockNo hdr
                           , headerFieldHash   = htb_Hash hdr
                           }
 
-instance StandardHash TrivBlock
+instance StandardHash BlockB
   
-type instance HeaderHash TrivBlock = Hash
+type instance HeaderHash BlockB = Hash
 
-type Hash = String  -- FIXME: any need to get more complicated?
-
-data instance BlockConfig TrivBlock = BCfgTrivBlock
+data instance BlockConfig BlockB = BCfgBlockB
   deriving (Generic, NoThunks)
-data instance CodecConfig TrivBlock = CCfgTrivBlock
+data instance CodecConfig BlockB = CCfgBlockB
   deriving (Generic, NoThunks)
-data instance StorageConfig TrivBlock = SCfgTrivBlock
+data instance StorageConfig BlockB = SCfgBlockB
   deriving (Generic, NoThunks)
 
 
----- Now, define a Plain Ledger, A -------------------------------------------
+---- A Simple Ledger B -------------------------------------------------------
 
-data instance LedgerState TrivBlock = LedgerA {
-      lgrA_tip :: Point TrivBlock
-      -- (header hash and slot num)
+data instance LedgerState BlockB =
+  LedgerB
+    { lb_tip :: Point BlockB -- (header hash and slot num)
     }
   deriving (Show, Eq, Generic, Serialise)
-  deriving NoThunks via OnlyCheckWhnfNamed "LedgerA" (LedgerState TrivBlock)
-
-  -- BTW: A&B were testing the transition.
-
+  deriving NoThunks via OnlyCheckWhnfNamed "LedgerB" (LedgerState BlockB)
 
 ---- data --------------------------------------------------------------------
 
-trivBlock :: TrivBlock
-trivBlock = TrivBlock { tb_header= HdrTB stub stub stub stub -- TODO
-                      }
+blockB :: BlockB
+blockB = BlockB { bb_header= HdrBlockB stub stub stub stub -- TODO
+                }
 
 
 ---- pill 2 ------------------------------------------------------------------
 -- TODO: put into separate module.
 
-data Block2 = Block2
-      -- , tb_body   :: [GenTx TrivBlock]
-      -- , tb_Epoch  :: EpochNo
+data BlockC = BlockC
+      -- , bc_body   :: [GenTx BlockB]
+      -- , bc_Epoch  :: EpochNo
 
-data instance GenTx Block2 = Tx2 { txName :: String }
+data instance GenTx BlockC = TxC { txName :: String }
   deriving (Show, Eq, Generic, Serialise)
-  deriving NoThunks via OnlyCheckWhnfNamed "Tx2" (GenTx Block2)
+  deriving NoThunks via OnlyCheckWhnfNamed "TxC" (GenTx BlockC)
 
-exaBlock2 = Block2
-              -- , tb_body  = [TxA "tx1", TxA "tx2"]
+blockC = BlockC
+          -- , tb_body  = [TxA "tx1", TxA "tx2"]
 
