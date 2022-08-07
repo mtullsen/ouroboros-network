@@ -41,6 +41,7 @@ data instance ConsensusConfig SP =
   SP_Config { cfgsp_iLeadInSlots  :: Set SlotNo
             , cfgsp_securityParam :: SecurityParam
             }
+  deriving (Eq, Show)
   deriving NoThunks via OnlyCheckWhnfNamed "SP_Config" (ConsensusConfig SP)
 
 
@@ -97,17 +98,19 @@ sp_config = SP_Config
 type instance BlockProtocol TrivBlock = SP
 
 -- | Define TrivBlock
-data TrivBlock =
-    TrivBlock
-      { tb_header :: Header TrivBlock
-      }
+data TrivBlock = TrivBlock
+                   { tb_header :: Header TrivBlock
+                   }
   deriving NoThunks via OnlyCheckWhnfNamed "TrivBlock" TrivBlock
 
-  -- TrivBlock has no tx's.
+  -- TrivBlock has no tx's, nothing but a header
 
-data instance Header TrivBlock = HdrTB {
-      hdrTB_fields :: HeaderFields TrivBlock -- TODO: NF: inline! make simpler.
-    , hdrTB_prev   :: ChainHash    TrivBlock
+data instance Header TrivBlock =
+  HdrTB
+    { htb_SlotNo  :: SlotNo
+    , htb_BlockNo :: BlockNo
+    , htb_Hash    :: HeaderHash TrivBlock
+    , htb_prev    :: ChainHash TrivBlock
     }
   deriving stock    (Show, Eq, Generic)
   deriving anyclass (Serialise)
@@ -116,9 +119,9 @@ data instance Header TrivBlock = HdrTB {
 
 instance BlockSupportsProtocol TrivBlock where
   validateView _ _ = ()
-  -- selectView   = stub  -- method defaulted.  (MT-TODO: understand.)
-
--- | the two direct super-classes of BlockSupportsProtocol:
+  -- selectView   = stub
+  -- this method defaulted.  (MT-TODO: understand.)
+  -- TODO: do we want to use the defalt method in some/all of our pills?
 
 instance GetHeader TrivBlock where
   getHeader          = tb_header
@@ -126,30 +129,30 @@ instance GetHeader TrivBlock where
   headerIsEBB        = const Nothing
 
 instance GetPrevHash TrivBlock where
-  headerPrevHash = hdrTB_prev
-
+  headerPrevHash = htb_prev
 
 instance HasHeader TrivBlock where
-  getHeaderFields = getBlockHeaderFields
-                    -- see doc in *.Block.Abstract ; ~complex
-                    -- getBlockHeaderFields - seems to rely on ...
-
+  getHeaderFields = castHeaderFields       -- worth some commentary?
+                  . getHeaderFields
+                  . tb_header
                     
 instance HasHeader (Header TrivBlock) where
-  getHeaderFields = castHeaderFields . hdrTB_fields
-  
+  getHeaderFields hdr = HeaderFields
+                          { headerFieldSlot   = htb_SlotNo hdr
+                          , headerFieldBlockNo= htb_BlockNo hdr
+                          , headerFieldHash   = htb_Hash hdr
+                          }
+
 instance StandardHash TrivBlock
   
-type instance HeaderHash  TrivBlock = String -- Strict.ByteString
+type instance HeaderHash TrivBlock = Hash
 
-
+type Hash = String  -- FIXME: any need to get more complicated?
 
 data instance BlockConfig TrivBlock = BCfgTrivBlock
   deriving (Generic, NoThunks)
-
 data instance CodecConfig TrivBlock = CCfgTrivBlock
   deriving (Generic, NoThunks)
-
 data instance StorageConfig TrivBlock = SCfgTrivBlock
   deriving (Generic, NoThunks)
 
@@ -169,7 +172,7 @@ data instance LedgerState TrivBlock = LedgerA {
 ---- data --------------------------------------------------------------------
 
 trivBlock :: TrivBlock
-trivBlock = TrivBlock { tb_header= HdrTB stub stub -- TODO
+trivBlock = TrivBlock { tb_header= HdrTB stub stub stub stub -- TODO
                       }
 
 

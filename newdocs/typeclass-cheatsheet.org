@@ -12,14 +12,13 @@ TYPE-FAMILIES (with the implicit "kinds"):
                                     
                                     b ──(LedgerState :: B->L)──▶ l ──(AuxLedgerEvent :: L->*)──▶ lev   -- events emitted by ledger
                                                                  l ──(LedgerErr :: L->*)───────▶ lerr  -- errors when updating ledger
-                                    b ───────────(LedgerConfig :: B->*)────────────────────────▶ lc    -- type syn. for ...
-                                    b ───────────(LedgerError  :: B->*)────────────────────────▶ lerr  -- type syn. for ...
 
 
                                     b --(CodecConfig   :: B->*)------> codecc -- for serialisation and deserialisation
                                     b --(StorageConfig :: B->*)------> sc     -- other config [?]
                                     b --(Header        :: B->*)------> hdr    -- link block to its header
-
+                                    
+                                                b,l --(HeaderHash :: *->*)------> hash   -- link block/ledger/? to a hash
 
     p --(ChainDepState :: P->*)--> cds     -- protocol specific state (part that depends on the chain), may rollback
     p --(IsLeader      :: P->*)--> isldr   -- evidence that a node /is/ the leader
@@ -30,7 +29,15 @@ TYPE-FAMILIES (with the implicit "kinds"):
     p --(ValidationErr :: P->*)--> valerr  -- the error result when failing to add new header to `cds`
 
                        s ───(Ticked :: *->*)───▶ s'   -- time related changes applied to some state (`l`, `ledvw`, `cds`)
-                                  
+
+TYPE-CONSTRUCTORS (that are type-generic, as they call type families):  [not exhaustive!]
+
+                                    b ───────────(LedgerConfig :: B->*)────────────────────────▶ lc    -- type syn. for ...
+                                    b ───────────(LedgerError  :: B->*)────────────────────────▶ lerr  -- type syn. for ...
+                                    
+                                    b,l ──(HeaderFields :: *->*)────────────▶ data ...SlotNo,...BlockNo,...HeaderHash b...
+                                    b ────(ChainHash :: B->*)───────────────▶ data ... 
+                                                                      
 TYPE-CLASSES:
 
  class Ord (SelectView p) => ConsensusProtocol p where
@@ -41,8 +48,13 @@ TYPE-CLASSES:
    protocolSecurityParam :: cc -> SecurityParam                                      -- get security parameter 'k'
 
                               class (StandardHash b, Typeable b) => HasHeader b where -- abstract over block headers
-                                getHeaderFields :: b -> HeaderFields b    -- i.e., slot, blockno, hash
+                                getHeaderFields :: b -> HeaderFields b    -- i.e., return three fields: slot, blockno, hash
 
+                              class HasHeader (Header blk) => GetHeader blk where
+                                getHeader          :: b -> Header b             -- extract header from the block
+                                blockMatchesHeader :: Header b -> b -> Bool     -- check if the header is the header of the block
+                                headerIsEBB        :: Header b -> Maybe EpochNo -- when the header of an Epoch Boundary Block, ...
+  
                               class (HasHeader b, GetHeader b) => GetPrevHash b where   
                                 headerPrevHash :: Header b -> ChainHash b  -- get the hash of predecessor
   
@@ -70,7 +82,9 @@ TYPE-CLASSES:
     ledgerViewForecastAt :: lc -> l -> Forecast ledvw        -- Get a forecast at the given ledger state.
       
                                                   
-* Networking code: some basic definitions
+* Networking code: some basic definitions for Blocks and such
+
+data ChainHash b = GenesisHash | BlockHash !(HeaderHash b)  -- Our*.Network.Block
 
 -- | Header fields we expect to be present in a block
 --
