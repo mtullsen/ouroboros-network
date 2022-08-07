@@ -315,7 +315,9 @@ test-suite test-examples
   main-is:             Main.hs
   other-modules:
                        Test.Example
-                       Test.Tutorial
+                     , Test.Tutorial
+                     , Test.Utilities
+                     , Test.ToyLedger1
 
   build-depends:       base
                      , QuickCheck

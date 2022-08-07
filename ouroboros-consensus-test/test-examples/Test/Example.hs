@@ -13,10 +13,6 @@ import qualified Data.Set as Set
 import           Data.Void
 import           GHC.Generics (Generic)
 
--- pkgs tasty*:
-import           Test.Tasty
-import           Test.Tasty.QuickCheck
-
 -- pkg nothunks:
 import           NoThunks.Class (NoThunks, OnlyCheckWhnfNamed (..))
 
@@ -71,7 +67,7 @@ instance ConsensusProtocol SP where
       then Just SP_IsLeader
       else Nothing
 
-  protocolSecurityParam _cfg = k
+  protocolSecurityParam = cfgsp_securityParam
 
   tickChainDepState     _ _ _ _ = TickedTrivial
                                   -- works b/c ChainDepState SP = ()
