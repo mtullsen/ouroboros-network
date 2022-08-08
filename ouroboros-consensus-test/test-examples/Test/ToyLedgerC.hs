@@ -4,6 +4,7 @@
 {-# LANGUAGE DeriveGeneric              #-}
 {-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE DeriveAnyClass             #-}
+{-# LANGUAGE MultiParamTypeClasses      #-}
 
 module Test.ToyLedgerC where
 
@@ -25,7 +26,9 @@ import           Ouroboros.Consensus.Block.SupportsProtocol
 import           Ouroboros.Consensus.Protocol.Abstract
 import           Ouroboros.Consensus.Ticked
 import           Ouroboros.Consensus.Ledger.Abstract
-import           Ouroboros.Consensus.Ledger.SupportsMempool (GenTx)
+import           Ouroboros.Consensus.Ledger.SupportsMempool
+import           Ouroboros.Consensus.Ledger.SupportsProtocol
+import           Ouroboros.Consensus.HeaderValidation
 
 -- local modules:
 import           Test.Utilities
@@ -48,7 +51,7 @@ data instance ConsensusConfig PrtclC =
 
 instance ConsensusProtocol PrtclC where
   
-  type ChainDepState PrtclC = ()
+  type ChainDepState PrtclC = ()   -- FIXME
   type IsLeader      PrtclC = PrtclC_IsLeader
   type CanBeLeader   PrtclC = PrtclC_CanBeLeader
   
@@ -72,7 +75,7 @@ instance ConsensusProtocol PrtclC where
 
   tickChainDepState     _ _ _ _ = TickedTrivial
                                   -- works b/c ChainDepState PrtclC = ()
-                                  
+
   updateChainDepState   _ _ _ _ = return ()
   
   reupdateChainDepState _ _ _ _ = ()
@@ -103,40 +106,94 @@ instance BlockSupportsProtocol BlockC where
   -- this method defaulted.  (MT-TODO: understand.)
   -- TODO: do we want to use the defalt method in some/all of our pills?
 
--- define the transaction type for BlockC
 
-data instance GenTx BlockC = TxC { txName :: String }
+-- The transaction type for BlockC
+
+data Tx = Inc | Dec
+  deriving (Show, Eq, Generic, Serialise)
+
+data instance GenTx BlockC = TxC Tx
   deriving (Show, Eq, Generic, Serialise)
   deriving NoThunks via OnlyCheckWhnfNamed "TxC" (GenTx BlockC)
 
-
----- Configuration boilerplate: ----------------------------------------------
-
-data instance BlockConfig BlockC = BCfgBlockC
-  deriving (Generic, NoThunks)
-data instance CodecConfig BlockC = CCfgBlockC
-  deriving (Generic, NoThunks)
-data instance StorageConfig BlockC = SCfgBlockC
-  deriving (Generic, NoThunks)
+newtype instance Validated (GenTx BlockC) =
+  ValidatedGenTxBlockC (GenTx BlockC)
+  deriving (Show, Eq, Generic, Serialise)
+  deriving NoThunks
 
 
 ---- The Ledger State for Block C --------------------------------------------
 
 data instance LedgerState BlockC =
   LedgerC
-    { lsc_tip :: Point BlockC -- (header hash and slot num)
-    , lsc_x   :: Int          -- just an up/down counter
+    { lsbc_tip :: Point BlockC -- (header hash and slot num)
+    , lsbc_cnt :: Int          -- just an up/down counter
     }
   deriving (Show, Eq, Generic, Serialise)
   deriving NoThunks via OnlyCheckWhnfNamed "LedgerC" (LedgerState BlockC)
 
----- data --------------------------------------------------------------------
+newtype instance Ticked (LedgerState BlockC) =
+  TickedLedgerStateC {
+    getTickedLedgerStateC :: LedgerState BlockC
+  }
+  deriving (Show, Eq, Generic, Serialise)
+  deriving NoThunks
+
+type instance LedgerCfg (LedgerState BlockC) = ()
+
+type instance ApplyTxErr BlockC = ()
+
+---- Now for some class definitions: -----------------------------------------
+
+instance GetTip (Ticked(LedgerState BlockC)) where {}
+
+instance GetTip (LedgerState BlockC) where
+  getTip = stub lsbc_tip
+
+  -- FIXME: ^ need both?
+
+type LedgerErr_BlockC = String
+  
+instance IsLedger (LedgerState BlockC) where
+  type instance LedgerErr      (LedgerState BlockC) = LedgerErr_BlockC 
+  type instance AuxLedgerEvent (LedgerState BlockC) = ()
+  applyChainTickLedgerResult _cfg slotno l =
+    LedgerResult {lrEvents= [], lrResult= tickStub l}
+      -- FIXME: can 'Ticked l' be ()? not sure context here.
+
+instance ApplyBlock (LedgerState BlockC) BlockC where
+  applyBlockLedgerResult _lc b tl =
+    return $ LedgerResult {lrEvents= [], lrResult= stub b} -- FIXME
+  reapplyBlockLedgerResult _lc b tl =
+    LedgerResult {lrEvents= [], lrResult= stub b}          -- FIXME
+    
+instance UpdateLedger BlockC where {}
+
+instance LedgerSupportsProtocol BlockC where
+  protocolLedgerView _lc tl  = TickedTrivial 
+  ledgerViewForecastAt _lc l = stub -- FIXME
+    
+instance LedgerSupportsMempool BlockC where
+  -- txInvariant defaults
+  applyTx _lc _ slotno tx tls =
+    return (tls, error "validated tx" tx)
+    where
+    applyTxC (TxC Inc) i = i+1
+    applyTxC (TxC Dec) i = i-1
+
+---- Let's just ignore these for now -----------------------------------------
+
+instance HasAnnTip               BlockC where {}
+instance ValidateEnvelope        BlockC where {}
+instance BasicEnvelopeValidation BlockC where {}
+
+---- Data --------------------------------------------------------------------
 
 blockC :: BlockC
 blockC = BlockC { bc_header= HdrBlockC stub stub stub stub -- TODO
-                , bc_body  = []
+                , bc_body  = [TxC Inc, TxC Inc]
                 }
-          -- , tb_body  = -- [TxC "tx1", TxC "tx2"]
+
 
 
 ---- header miscellanea (skim over?) -----------------------------------------
@@ -177,4 +234,16 @@ instance HasHeader BlockC where
 type instance HeaderHash BlockC = Hash
 
 instance StandardHash BlockC
+
+
+---- Configuration boilerplate: ----------------------------------------------
+
+data instance BlockConfig BlockC = BCfgBlockC
+  deriving (Generic, NoThunks)
+data instance CodecConfig BlockC = CCfgBlockC
+  deriving (Generic, NoThunks)
+data instance StorageConfig BlockC = SCfgBlockC
+  deriving (Generic, NoThunks)
+
+
 

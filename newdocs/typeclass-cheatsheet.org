@@ -33,6 +33,8 @@ TYPE-FAMILIES (with the implicit "kinds"):
                                     b ───(GenTx :: B->*)────────────────────────▶ tx      -- generalized transactions
                                     b ───(ApplyTxErr :: B->*)───────────────────▶ txerr   -- errors
 
+                                    b,tx ───(Validated :: *->*)─────────────────▶ valb,valtx  -- TODO: hmmm
+                                    
 TYPE-CONSTRUCTORS (that are type-generic, as they use type families):  [not exhaustive!]
 
                                     b ───────────(LedgerConfig :: B->*)────────────────────────▶ lc    -- type syn. for ...  -- TODO
@@ -62,11 +64,13 @@ TYPE-CLASSES:
                               class (HasHeader b, GetHeader b) => GetPrevHash b where   
                                 headerPrevHash :: Header b -> ChainHash b  -- get the hash of predecessor
   
-                                                class GetTip l where
+                                                class GetTip l where                             -- TODO: this work on more than 'l'?
                                                   getTip :: l → Point l
 
                                                 class (GetTip l, GetTip (Ticked l)) => IsLedger l where
-                                                  applyChainTickLedgerResult :: lc → SlotNo → l → LedgerResult l (Ticked l)
+                                                  type family LedgerErr l      :: Type                   
+                                                  type family AuxLedgerEvent l :: Type
+                                                  applyChainTickLedgerResult   :: lc → SlotNo → l → LedgerResult l (Ticked l)
 
                               -- BlockSupportsProtocol b - can we construct the views on block `b` required by protocol `p`
                               class (GetPrevHash b, ConsensusProtocol p) => BlockSupportsProtocol b where              -- [[FN2]]
@@ -90,7 +94,21 @@ TYPE-CLASSES:
     applyTx   :: lc -> WhetherToIntervene -> SlotNo -> tx -> tls -> Except txerr (tls, Validated tx) -- apply an unvalidated transaction
     reapplyTx :: lc ->             SlotNo -> Validated tx -> tls -> Except txerr tls     -- apply a previously validated transaction ...
     ...
-    
+
+* Consensus code:
+** ouroboros-consensus/src/Ouroboros/Consensus/Ledger/Basics.hs
+
+-- | The result of invoke a ledger function that does validation
+--
+-- Note: we do not instantiate 'Applicative' or 'Monad' for this type because
+-- those interfaces would typically incur space leaks. We encourage you to
+-- process the events each time you invoke a ledger function.
+data LedgerResult l a = LedgerResult
+  { lrEvents :: [AuxLedgerEvent l]
+  , lrResult :: !a
+  }
+  deriving (Foldable, Functor, Traversable)
+  
 * Networking code: some basic definitions for Blocks and such
 
 data ChainHash b = GenesisHash | BlockHash !(HeaderHash b)  -- Our*.Network.Block
@@ -172,15 +190,7 @@ blockNo = headerFieldBlockNo . getHeaderFields
 * TODO improvements/adds
 
 - TODO can you distinguish associated types without the diagram getting *too* busy?
-  
-- add other key type families
-  - =Validated= in **.Ledger.Abstract
-  - and
-    : b ------------------- (GenTx :: B->*)---> tx  -- generalized transactions
-    ...?
-
-    -- 'generalized transactions'?  so what is a non generalized tx?
-        NF: possibly an utxo.
+  - TODO just duplicate the 'type/data family' in the class defn
     
 - rendering 
   - be consistent: ascii vs unicode arrows & etc
