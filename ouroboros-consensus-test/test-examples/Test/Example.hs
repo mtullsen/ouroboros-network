@@ -39,8 +39,8 @@ data PrtclB_IsLeader    = PrtclB_IsLeader    -- Evidence we /are/ leader
 
 data instance ConsensusConfig PrtclB =
   PrtclB_Config { cfgsp_iLeadInSlots  :: Set SlotNo
-            , cfgsp_securityParam :: SecurityParam
-            }
+                , cfgsp_securityParam :: SecurityParam
+                }
   deriving (Eq, Show)
   deriving NoThunks via OnlyCheckWhnfNamed "PrtclB_Config"
                         (ConsensusConfig PrtclB)
@@ -97,6 +97,13 @@ data BlockB = BlockB { bb_header :: Header BlockB
 
   -- BlockB has no tx's, nothing but a header
 
+-- | And 
+instance BlockSupportsProtocol BlockB where
+  validateView _ _ = ()
+  -- selectView   = stub
+  -- this method defaulted.  (MT-TODO: understand.)
+  -- TODO: do we want to use the defalt method in some/all of our pills?
+
 -- | the minimum header:
 data instance Header BlockB =
   HdrBlockB
@@ -109,13 +116,6 @@ data instance Header BlockB =
   deriving anyclass (Serialise)
   deriving NoThunks via OnlyCheckWhnfNamed "HdrBlockB" (Header BlockB)
 
-
-instance BlockSupportsProtocol BlockB where
-  validateView _ _ = ()
-  -- selectView   = stub
-  -- this method defaulted.  (MT-TODO: understand.)
-  -- TODO: do we want to use the defalt method in some/all of our pills?
-
 instance GetHeader BlockB where
   getHeader          = bb_header
   blockMatchesHeader = \_ _ -> True -- We are not interested in integrity here
@@ -124,11 +124,7 @@ instance GetHeader BlockB where
 instance GetPrevHash BlockB where
   headerPrevHash = htb_prev
 
-instance HasHeader BlockB where
-  getHeaderFields = castHeaderFields       -- worth some commentary?
-                  . getHeaderFields
-                  . bb_header
-                    
+-- | one might like "HasHeaderData" as a better name??
 instance HasHeader (Header BlockB) where
   getHeaderFields hdr = HeaderFields
                           { headerFieldSlot   = htb_SlotNo hdr
@@ -136,10 +132,15 @@ instance HasHeader (Header BlockB) where
                           , headerFieldHash   = htb_Hash hdr
                           }
 
-instance StandardHash BlockB
-  
+instance HasHeader BlockB where
+  getHeaderFields = castHeaderFields       -- worth some commentary?
+                  . getHeaderFields
+                  . bb_header
+                    
 type instance HeaderHash BlockB = Hash
 
+instance StandardHash BlockB
+  
 data instance BlockConfig BlockB = BCfgBlockB
   deriving (Generic, NoThunks)
 data instance CodecConfig BlockB = CCfgBlockB
@@ -164,7 +165,7 @@ blockB = BlockB { bb_header= HdrBlockB stub stub stub stub -- TODO
                 }
 
 
----- pill 2 ------------------------------------------------------------------
+---- pill C ------------------------------------------------------------------
 -- TODO: put into separate module.
 
 data BlockC = BlockC
