@@ -30,14 +30,18 @@ TYPE-FAMILIES (with the implicit "kinds"):
 
                        s ───(Ticked :: *->*)───▶ s'   -- time related changes applied to some state (`l`, `ledvw`, `cds`)
 
-TYPE-CONSTRUCTORS (that are type-generic, as they call type families):  [not exhaustive!]
+                                    b ───(GenTx :: B->*)────────────────────────▶ tx      -- generalized transactions
+                                    b ───(ApplyTxErr :: B->*)───────────────────▶ txerr   -- errors
 
-                                    b ───────────(LedgerConfig :: B->*)────────────────────────▶ lc    -- type syn. for ...
+TYPE-CONSTRUCTORS (that are type-generic, as they use type families):  [not exhaustive!]
+
+                                    b ───────────(LedgerConfig :: B->*)────────────────────────▶ lc    -- type syn. for ...  -- TODO
                                     b ───────────(LedgerError  :: B->*)────────────────────────▶ lerr  -- type syn. for ...
+                                    b ───────────(TickedLedgerState :: B->*)───────────────────▶ tls   -- Ticked (LedgerState b)
                                     
-                                    b,l ──(HeaderFields :: *->*)────────────▶ data ...SlotNo,...BlockNo,...HeaderHash b...
+                                    b,l ──(HeaderFields :: *->*)────────────▶ data .. SlotNo .. BlockNo .. HeaderHash b ..
                                     b ────(ChainHash :: B->*)───────────────▶ data ... 
-                                                                      
+
 TYPE-CLASSES:
 
  class Ord (SelectView p) => ConsensusProtocol p where
@@ -81,7 +85,12 @@ TYPE-CLASSES:
     protocolLedgerView   :: lc -> Ticked l -> Ticked ledvw   -- `ledvw` (`LedgerView (BlockProtocol b)`) extracted from the ledger
     ledgerViewForecastAt :: lc -> l -> Forecast ledvw        -- Get a forecast at the given ledger state.
       
-                                                  
+  class (UpdateLedger b) => LedgerSupportsMempool b where
+    txInvariant :: GenTx b -> Bool               -- ^ check whether the internal invariants of the transaction hold.
+    applyTx   :: lc -> WhetherToIntervene -> SlotNo -> tx -> tls -> Except txerr (tls, Validated tx) -- apply an unvalidated transaction
+    reapplyTx :: lc ->             SlotNo -> Validated tx -> tls -> Except txerr tls     -- apply a previously validated transaction ...
+    ...
+    
 * Networking code: some basic definitions for Blocks and such
 
 data ChainHash b = GenesisHash | BlockHash !(HeaderHash b)  -- Our*.Network.Block
@@ -173,9 +182,6 @@ blockNo = headerFieldBlockNo . getHeaderFields
     -- 'generalized transactions'?  so what is a non generalized tx?
         NF: possibly an utxo.
     
-- other key types?
-  =LedgerSupportsMempool blk=
-  
 - rendering 
   - be consistent: ascii vs unicode arrows & etc
   - group the classes with gray borders
