@@ -174,8 +174,12 @@ instance IsLedger (LedgerState BlockC) where
       -- FIXME: can 'Ticked l' be ()?  not sure of  the context here.
 
 instance ApplyBlock (LedgerState BlockC) BlockC where
-  applyBlockLedgerResult _lc b tl =
-    return $ LedgerResult {lrEvents= [], lrResult= stub b} -- FIXME
+  applyBlockLedgerResult _lc b (TickedLedgerStateC ldgrSt) =
+    return $
+      LedgerResult { lrEvents= []
+                   , lrResult= stub b
+                   } 
+    
   reapplyBlockLedgerResult _lc b tl =
     LedgerResult {lrEvents= [], lrResult= stub b}          -- FIXME
 
@@ -186,23 +190,25 @@ instance UpdateLedger BlockC where {}
 
 instance LedgerSupportsProtocol BlockC where
   protocolLedgerView _lc tl  = TickedTrivial 
-  ledgerViewForecastAt = stub trivialForecast -- FIXME
+  ledgerViewForecastAt = stub
+                          -- FIXME ^, use trivialForecast?
     -- For PrtclD: want this to be more.
     
 instance LedgerSupportsMempool BlockC where
+  
   txInvariant _tx = True   -- same as default method
 
-  applyTx _lc _ slotno tx tickedLdgrSt =
+  applyTx _lc _ slotno tx (TickedLedgerStateC ldgrSt) =
     return ( TickedLedgerStateC 
                ldgrSt{lsbc_cnt= applyTxC tx (lsbc_cnt ldgrSt)}
            , ValidatedTxC
            )
     where
-    ldgrSt = unTickedLedgerStateC tickedLdgrSt
     applyTxC (TxC Inc) i = i+1
     applyTxC (TxC Dec) i = i-1
     
   -- TODO: many more methods here.
+
 
 ---- Let's just ignore these for now -----------------------------------------
 
