@@ -29,6 +29,7 @@ import           Ouroboros.Consensus.Ledger.Abstract
 import           Ouroboros.Consensus.Ledger.SupportsMempool
 import           Ouroboros.Consensus.Ledger.SupportsProtocol
 import           Ouroboros.Consensus.HeaderValidation
+import           Ouroboros.Consensus.Forecast (trivialForecast)
 
 -- local modules:
 import           Test.Utilities
@@ -116,17 +117,24 @@ data instance GenTx BlockC = TxC Tx
   deriving (Show, Eq, Generic, Serialise)
   deriving NoThunks via OnlyCheckWhnfNamed "TxC" (GenTx BlockC)
 
+{- OLD:
 newtype instance Validated (GenTx BlockC) =
   ValidatedGenTxBlockC (GenTx BlockC)
   deriving (Show, Eq, Generic, Serialise)
   deriving NoThunks
+-}
 
+-- TODO: unclear re Validated: does 'Validated a' comprise 'a' or not?
+
+data instance Validated (GenTx BlockC) = ValidatedTxC
+  deriving (Show, Eq, Generic, Serialise)
+  deriving NoThunks
 
 ---- The Ledger State for Block C --------------------------------------------
 
 data instance LedgerState BlockC =
   LedgerC
-    { lsbc_tip :: Point BlockC -- (header hash and slot num)
+    { lsbc_tip :: Point BlockC -- header hash and slot num; FIXME needed here?
     , lsbc_cnt :: Int          -- just an up/down counter
     }
   deriving (Show, Eq, Generic, Serialise)
@@ -134,58 +142,74 @@ data instance LedgerState BlockC =
 
 newtype instance Ticked (LedgerState BlockC) =
   TickedLedgerStateC {
-    getTickedLedgerStateC :: LedgerState BlockC
+    unTickedLedgerStateC :: LedgerState BlockC
   }
   deriving (Show, Eq, Generic, Serialise)
   deriving NoThunks
 
+-- No LedgerCfg data:
 type instance LedgerCfg (LedgerState BlockC) = ()
 
 type instance ApplyTxErr BlockC = ()
 
+
 ---- Now for some class definitions: -----------------------------------------
 
-instance GetTip (Ticked(LedgerState BlockC)) where {}
+instance GetTip (Ticked(LedgerState BlockC)) where
+  getTip = stub lsbc_tip
 
 instance GetTip (LedgerState BlockC) where
   getTip = stub lsbc_tip
 
-  -- FIXME: ^ need both?
+-- FIXME: appears you need both the above: both need more "glue"
 
 type LedgerErr_BlockC = String
   
 instance IsLedger (LedgerState BlockC) where
   type instance LedgerErr      (LedgerState BlockC) = LedgerErr_BlockC 
   type instance AuxLedgerEvent (LedgerState BlockC) = ()
+
   applyChainTickLedgerResult _cfg slotno l =
     LedgerResult {lrEvents= [], lrResult= tickStub l}
-      -- FIXME: can 'Ticked l' be ()? not sure context here.
+      -- FIXME: can 'Ticked l' be ()?  not sure of  the context here.
 
 instance ApplyBlock (LedgerState BlockC) BlockC where
   applyBlockLedgerResult _lc b tl =
     return $ LedgerResult {lrEvents= [], lrResult= stub b} -- FIXME
   reapplyBlockLedgerResult _lc b tl =
     LedgerResult {lrEvents= [], lrResult= stub b}          -- FIXME
-    
-instance UpdateLedger BlockC where {}
+
+
+-- no methods here, just a roll-up class:
+
+instance UpdateLedger BlockC where {}  
 
 instance LedgerSupportsProtocol BlockC where
   protocolLedgerView _lc tl  = TickedTrivial 
-  ledgerViewForecastAt _lc l = stub -- FIXME
+  ledgerViewForecastAt = stub trivialForecast -- FIXME
+    -- For PrtclD: want this to be more.
     
 instance LedgerSupportsMempool BlockC where
-  -- txInvariant defaults
-  applyTx _lc _ slotno tx tls =
-    return (tls, error "validated tx" tx)
+  txInvariant _tx = True   -- same as default method
+
+  applyTx _lc _ slotno tx tickedLdgrSt =
+    return ( TickedLedgerStateC 
+               ldgrSt{lsbc_cnt= applyTxC tx (lsbc_cnt ldgrSt)}
+           , ValidatedTxC
+           )
     where
+    ldgrSt = unTickedLedgerStateC tickedLdgrSt
     applyTxC (TxC Inc) i = i+1
     applyTxC (TxC Dec) i = i-1
+    
+  -- TODO: many more methods here.
 
 ---- Let's just ignore these for now -----------------------------------------
 
 instance HasAnnTip               BlockC where {}
 instance ValidateEnvelope        BlockC where {}
 instance BasicEnvelopeValidation BlockC where {}
+
 
 ---- Data --------------------------------------------------------------------
 
