@@ -32,7 +32,7 @@ import           Test.Utilities
 
 ---- Define Protocol B : 'PrtclB' --------------------------------------------
 
-data PrtclB             -- TODO:_
+data PrtclB         
 
 data PrtclB_CanBeLeader = PrtclB_CanBeLeader -- Evidence we /can/ be a leader
 data PrtclB_IsLeader    = PrtclB_IsLeader    -- Evidence we /are/ leader
@@ -153,7 +153,7 @@ data instance StorageConfig BlockB = SCfgBlockB
 
 data instance LedgerState BlockB =
   LedgerB
-    { lb_tip :: Point BlockB -- (header hash and slot num)
+    { lsb_tip :: Point BlockB -- (header hash and slot num)
     }
   deriving (Show, Eq, Generic, Serialise)
   deriving NoThunks via OnlyCheckWhnfNamed "LedgerB" (LedgerState BlockB)
@@ -163,19 +163,3 @@ data instance LedgerState BlockB =
 blockB :: BlockB
 blockB = BlockB { bb_header= HdrBlockB stub stub stub stub -- TODO
                 }
-
-
----- pill C ------------------------------------------------------------------
--- TODO: put into separate module.
-
-data BlockC = BlockC
-      -- , bc_body   :: [GenTx BlockB]
-      -- , bc_Epoch  :: EpochNo
-
-data instance GenTx BlockC = TxC { txName :: String }
-  deriving (Show, Eq, Generic, Serialise)
-  deriving NoThunks via OnlyCheckWhnfNamed "TxC" (GenTx BlockC)
-
-blockC = BlockC
-          -- , tb_body  = [TxA "tx1", TxA "tx2"]
-

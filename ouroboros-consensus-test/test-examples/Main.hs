@@ -7,7 +7,8 @@ import           Test.Tasty.QuickCheck
 -- local modules:
 import           Test.Tutorial
 import           Test.Example
-import           Test.ToyLedger1
+import           Test.ToyLedgerC
+import           Test.ToyLedger1 -- defunct?
 
 main :: IO ()
 main = defaultMain test

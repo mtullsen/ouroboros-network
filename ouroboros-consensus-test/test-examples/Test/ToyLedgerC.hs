@@ -39,13 +39,12 @@ data PrtclC_CanBeLeader = PrtclC_CanBeLeader -- Evidence we /can/ be a leader
 data PrtclC_IsLeader    = PrtclC_IsLeader    -- Evidence we /are/ leader
 
 data instance ConsensusConfig PrtclC =
-  PrtclC_Config { cfgsp_iLeadInSlots  :: Set SlotNo
-                , cfgsp_securityParam :: SecurityParam
+  PrtclC_Config { ccpc_iLeadInSlots  :: Set SlotNo
+                , ccpc_securityParam :: SecurityParam
                 }
   deriving (Eq, Show)
   deriving NoThunks via OnlyCheckWhnfNamed "PrtclC_Config"
                         (ConsensusConfig PrtclC)
-
 
 instance ConsensusProtocol PrtclC where
   
@@ -65,7 +64,7 @@ instance ConsensusProtocol PrtclC where
   type ValidationErr PrtclC = Void
 
   checkIsLeader cfg PrtclC_CanBeLeader slot _tcds =
-      if slot `Set.member` cfgsp_iLeadInSlots cfg
+      if slot `Set.member` ccpc_iLeadInSlots cfg
       then Just PrtclC_IsLeader
       else Nothing
 
@@ -155,7 +154,7 @@ data instance Header BlockC =
   deriving NoThunks via OnlyCheckWhnfNamed "HdrBlockC" (Header BlockC)
 
 instance GetHeader BlockC where
-  getHeader          = bb_header
+  getHeader          = bc_header
   blockMatchesHeader = \_ _ -> True -- We are not interested in integrity here
   headerIsEBB        = const Nothing
 
