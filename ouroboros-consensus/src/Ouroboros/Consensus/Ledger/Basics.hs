@@ -63,7 +63,7 @@ getTipSlot = pointSlot . getTip
 -- no events
 data VoidLedgerEvent l
 
--- | The result of invoke a ledger function that does validation
+-- | The result of invoking a ledger function that does validation
 --
 -- Note: we do not instantiate 'Applicative' or 'Monad' for this type because
 -- those interfaces would typically incur space leaks. We encourage you to
