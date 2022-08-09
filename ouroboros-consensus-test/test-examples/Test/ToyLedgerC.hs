@@ -53,7 +53,7 @@ data instance ConsensusConfig PrtclC =
 
 instance ConsensusProtocol PrtclC where
   
-  type ChainDepState PrtclC = ()   -- FIXME: want for C
+  type ChainDepState PrtclC = ()   -- FIXME: want more here, for C
   type IsLeader      PrtclC = PrtclC_IsLeader
   type CanBeLeader   PrtclC = PrtclC_CanBeLeader
   
@@ -99,18 +99,20 @@ data BlockC = BlockC { bc_header :: Header BlockC
   deriving NoThunks via OnlyCheckWhnfNamed "BlockC" BlockC
 
 
--- associate BlockC to the consensus protocol PrtclC:
+-- associate BlockC to the protocol PrtclC:
 
 type instance BlockProtocol BlockC = PrtclC
 
 instance BlockSupportsProtocol BlockC where
-  validateView _ _ = ()
-  -- selectView   = stub
-    -- this method defaulted.  (MT-TODO: understand.)
-    -- Q. do we want to use the default method in some/all of our pills?
+  validateView _bcfg _hdr = ()
+  selectView   _bcfg hdr  = blockNo hdr
+                            -- i.e., the default method.
+                            -- i.e., we only need the block no in order
+                            -- to do chain selection
+                            -- see -.Protocol.Abstract.preferCandidate
+  
 
-
--- The transaction type for BlockC
+-- The transaction type for BlockC:
 
 data Tx = Inc | Dec
   deriving (Show, Eq, Generic, Serialise)
@@ -120,8 +122,9 @@ data instance GenTx BlockC = TxC Tx
   deriving NoThunks via OnlyCheckWhnfNamed "TxC" (GenTx BlockC)
 
 -- And what it means for the transaction to be Validated (trivial for now)
+-- - Note that Validated must include the transaction as well as the evidence
 
-data instance Validated (GenTx BlockC) = ValidatedTxC
+data instance Validated (GenTx BlockC) = ValidatedTxC (GenTx BlockC)
   deriving (Show, Eq, Generic, Serialise)
   deriving NoThunks
 
@@ -175,7 +178,7 @@ instance ApplyBlock (LedgerState BlockC) BlockC where
     return $
       LedgerResult { lrEvents= []
                    , lrResult= stub -- yada, yada
-                                -- (applyTx ldgrCfg stub slot)
+                                -- (applyTx ldgrCfg DoNotIntervene slot)
                                 -- tickedLdgrSt
                                 -- (bc_body b)
                                 -- {lsbc_tip= stub} -- TODO
@@ -216,14 +219,23 @@ instance LedgerSupportsMempool BlockC where
   applyTx _lc _ slotno tx (TickedLedgerStateC ldgrSt) =
     return ( TickedLedgerStateC 
                ldgrSt{lsbc_count= applyTxC tx (lsbc_count ldgrSt)}
-           , ValidatedTxC
+           , ValidatedTxC tx -- no evidence being provided now.
            )
     where
     applyTxC (TxC Inc) i = i+1
     applyTxC (TxC Dec) i = i-1
-    
-  -- TODO: many more methods here.
 
+  reapplyTx lc slotno vtx tls =
+    fst <$> applyTx lc (error "dni" :: WhetherToIntervene)
+                    slotno (txForgetValidated vtx) tls
+    -- in general, this would *not* be an efficient way to implement
+    
+  txsMaxBytes _    = 50 -- TBD
+  txInBlockSize tx = 2  -- post serialization size of 'tx', FIXME
+                        -- NOTE: poor name for method
+                     
+  txForgetValidated (ValidatedTxC tx) = tx
+    -- remove evidence of validation
 
 ---- Let's just ignore these for now -----------------------------------------
 

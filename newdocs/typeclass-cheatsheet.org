@@ -47,6 +47,7 @@ TYPE-CONSTRUCTORS (that are type-generic, as they use type families):  [not exha
 TYPE-CLASSES:
 
  class Ord (SelectView p) => ConsensusProtocol p where
+   type family {ChainDepState, IsLeader, CanBeLeader, SelectView, LedgerView, ValidationErr, ValidateView} :: P -> *
    checkIsLeader         :: cc -> cbldr -> SlotNo -> Ticked cds -> Maybe isldr       -- `Just evidence` when we lead this slot
    tickChainDepState     :: cc -> Ticked ledvw -> SlotNo -> cds -> Ticked cds        -- tick the `cds` to the SlotNo
    updateChainDepState   :: cc -> valvw -> SlotNo -> Ticked cds -> Except valerr cds -- apply header to `cds` (may error)
@@ -94,7 +95,9 @@ TYPE-CLASSES:
     txInvariant :: GenTx b -> Bool                                               -- check if internal invariants of the transaction hold
     applyTx   :: lc -> WhetherToIntervene -> SlotNo -> tx -> tls -> Except txerr (tls, Validated tx) -- apply an unvalidated transaction
     reapplyTx :: lc ->             SlotNo -> Validated tx -> tls -> Except txerr tls     -- apply a previously validated transaction ...
-    ...  -- TODO: more methods!
+    txsMaxBytes :: tls -> Word32                 -- max number of bytes of transactions that can be put into a block    
+    txInBlockSize :: tx -> Word32                -- post-serialisation size in bytes of a 'GenTx b'  [name?!]
+    txForgetValidated :: Validated tx -> tx      -- Discard the evidence that transaction has been previously validated     
 
 * Consensus code:
 ** ouroboros-consensus/src/Ouroboros/Consensus/Ledger/Basics.hs
