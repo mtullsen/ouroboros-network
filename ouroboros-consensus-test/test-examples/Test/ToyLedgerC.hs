@@ -62,10 +62,10 @@ instance ConsensusProtocol PrtclC where
   type SelectView    PrtclC = BlockNo
 
   -- | View on the ledger required by the protocol
-  type LedgerView    PrtclC = ()               -- TODO-D.
+  type LedgerView    PrtclC = ()               -- TODO: change for Prtcl D.
   
   -- | View on a block header required for header validation
-  type ValidateView  PrtclC = ()               -- TODO-D
+  type ValidateView  PrtclC = ()               -- TODO: change for Prtcl D
   type ValidationErr PrtclC = Void
 
   checkIsLeader cfg PrtclC_CanBeLeader slot _tcds =
@@ -129,7 +129,7 @@ data instance Validated (GenTx BlockC) = ValidatedTxC (GenTx BlockC)
   deriving NoThunks
 
 
----- The Ledger State for Block C --------------------------------------------
+---- The Ledger State for Block C: Type family instances ---------------------
 
 data instance LedgerState BlockC =
   LedgerC
@@ -149,10 +149,10 @@ newtype instance Ticked (LedgerState BlockC) =
 -- No LedgerCfg data:
 type instance LedgerCfg (LedgerState BlockC) = ()
 
+-- No ApplyTxErr data:
 type instance ApplyTxErr BlockC = ()
 
-
----- Now for some class instances --------------------------------------------
+---- The Ledger State for Block C: class instances ---------------------------
 
 instance GetTip (Ticked(LedgerState BlockC)) where
   getTip = stub lsbc_tip
@@ -171,7 +171,7 @@ instance IsLedger (LedgerState BlockC) where
   applyChainTickLedgerResult _cfg slot ldgrSt =
     LedgerResult {lrEvents= [], lrResult= tickLedgerStateC slot ldgrSt}
 
-    -- updating the slot, but otherwise no ledger changes. (?)
+    -- We update the slot, but otherwise no changes to ledger state.
 
 instance ApplyBlock (LedgerState BlockC) BlockC where
   applyBlockLedgerResult ldgrCfg b tickedLdgrSt =
@@ -186,14 +186,15 @@ instance ApplyBlock (LedgerState BlockC) BlockC where
       where
       slot = stub -- TODO
 
-  reapplyBlockLedgerResult _lc b tl =
-    LedgerResult {lrEvents= [], lrResult= stub b}          -- FIXME
+  reapplyBlockLedgerResult _lc b _tl =
+    LedgerResult {lrEvents= [], lrResult= stub b}          -- TODO
 
+-- | tickLedgerStateC - helper function to tick the LedgerState
 tickLedgerStateC ::
   SlotNo -> LedgerState BlockC -> Ticked (LedgerState BlockC)
 tickLedgerStateC slot ldgrSt =
   -- just update the slot
-  --   and just leave the hash unchanged?  Q. Nick?
+  --  - But leave the hash unchanged?!  Q. Nick?
   TickedLedgerStateC ldgrSt{lsbc_tip=BlockPoint slot hash'}
 
   where
@@ -201,38 +202,49 @@ tickLedgerStateC slot ldgrSt =
         $ pointHash  -- this might be origin
         $ lsbc_tip ldgrSt
   
+        -- Nick: is there a simpler, more idiomatic way to do this?
         -- See Ouroboros.Network.Block for useful functions
   
 -- | no methods here, 'UpdateLedger' is a class to roll-up classes:
 instance UpdateLedger BlockC where {}  
 
 instance LedgerSupportsProtocol BlockC where
-  protocolLedgerView _lc tl = TickedTrivial 
-  ledgerViewForecastAt = stub
-                          -- FIXME ^, use trivialForecast?
-    -- For PrtclD: want this to be more.
+  protocolLedgerView _lcfg  _tl = TickedTrivial 
+
+  ledgerViewForecastAt _lccf _l = stub
+                          -- FIXME ^, use trivialForecast?  Nick?
+    -- For Prtcl D: want this to be more.
     
 instance LedgerSupportsMempool BlockC where
   
   txInvariant _tx = True   -- same as default method
 
-  applyTx _lc _ slotno tx (TickedLedgerStateC ldgrSt) =
+  applyTx _lc _wti slot tx (TickedLedgerStateC ldgrSt) =
     return ( TickedLedgerStateC 
                ldgrSt{lsbc_count= applyTxC tx (lsbc_count ldgrSt)}
            , ValidatedTxC tx -- no evidence being provided now.
            )
+      -- FIXME: Assuming we need to call 'tickLedgerStateC', and thus
+      -- use 'slot'.  Right Nick?
+    
     where
-    applyTxC (TxC Inc) i = i+1
+    -- the essence of Txs affecting ledger state:
+    applyTxC (TxC Inc) i = i+1  
     applyTxC (TxC Dec) i = i-1
 
-  reapplyTx lc slotno vtx tls =
-    fst <$> applyTx lc (error "dni" :: WhetherToIntervene)
-                    slotno (txForgetValidated vtx) tls
+  reapplyTx lc slot vtx tls =
+    fst <$> applyTx lc
+                    (error "wti" :: WhetherToIntervene)
+                    slot
+                    (txForgetValidated vtx)
+                    tls
     -- in general, this would *not* be an efficient way to implement
     
-  txsMaxBytes _    = 50 -- TBD
-  txInBlockSize tx = 2  -- post serialization size of 'tx', FIXME
-                        -- NOTE: poor name for method
+  txsMaxBytes _     = 20 -- just a random magic number for now
+  txInBlockSize _tx = 2  -- post serialization size of 'tx' 
+                         -- For BlockC, our Txs are all the same size
+                         -- '2' probably not right
+                         -- CODE-NOTE: somewhat misleading name for method
                      
   txForgetValidated (ValidatedTxC tx) = tx
     -- remove evidence of validation
@@ -253,7 +265,8 @@ blockC = BlockC { bc_header= HdrBlockC stub stub stub stub -- TODO
 
 
 
----- header miscellanea (skim over?) -----------------------------------------
+---- header miscellanea ------------------------------------------------------
+-- For Doc: just skim over.
 
 -- | the minimum header:
 data instance Header BlockC =
@@ -275,7 +288,9 @@ instance GetHeader BlockC where
 instance GetPrevHash BlockC where
   headerPrevHash = hbc_prev
 
--- | one might like "HasHeaderData" as a better name??
+-- CODE-NOTE: one might like "HasHeaderData/HasHeaderFields" as a slightly
+-- less misleading name for the 'HasHeader' class
+
 instance HasHeader (Header BlockC) where
   getHeaderFields hdr = HeaderFields
                           { headerFieldSlot   = hbc_SlotNo hdr
@@ -284,7 +299,7 @@ instance HasHeader (Header BlockC) where
                           }
 
 instance HasHeader BlockC where
-  getHeaderFields = castHeaderFields       -- worth some commentary?
+  getHeaderFields = castHeaderFields       -- Q. worth some commentary?
                   . getHeaderFields
                   . bc_header
                     
