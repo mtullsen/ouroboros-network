@@ -41,8 +41,8 @@ TYPE-CONSTRUCTORS (that are type-generic, as they use type families):  [not exha
                                     b ───────────(LedgerError  :: B->*)────────────────────────▶ lerr  -- type syn. for ...
                                     b ───────────(TickedLedgerState :: B->*)───────────────────▶ tls   -- Ticked (LedgerState b)
                                     
-                                    b,l ──(HeaderFields :: *->*)────────────▶ data .. SlotNo .. BlockNo .. HeaderHash b ..
-                                    b ────(ChainHash :: B->*)───────────────▶ data ... 
+                                    b,l ──(HeaderFields :: *->*)────────▶ data .. SlotNo .. BlockNo .. HeaderHash b ..
+                                    b ────(ChainHash :: B->*)───────────▶ data ChainHash b = GenesisHash | BlockHash !(HeaderHash b)
 
 TYPE-CLASSES:
 
@@ -71,6 +71,7 @@ TYPE-CLASSES:
                                                   type family LedgerErr l      :: Type                   
                                                   type family AuxLedgerEvent l :: Type
                                                   applyChainTickLedgerResult   :: lc → SlotNo → l → LedgerResult l (Ticked l)
+                                                                                  -- apply "slot based" ledger transformation
 
                               -- BlockSupportsProtocol b - can we construct the views on block `b` required by protocol `p`
                               class (GetPrevHash b, ConsensusProtocol p) => BlockSupportsProtocol b where              -- [[FN2]]
@@ -90,10 +91,10 @@ TYPE-CLASSES:
     ledgerViewForecastAt :: lc -> l -> Forecast ledvw        -- Get a forecast at the given ledger state.
       
   class (UpdateLedger b) => LedgerSupportsMempool b where
-    txInvariant :: GenTx b -> Bool               -- ^ check whether the internal invariants of the transaction hold.
+    txInvariant :: GenTx b -> Bool                                               -- check if internal invariants of the transaction hold
     applyTx   :: lc -> WhetherToIntervene -> SlotNo -> tx -> tls -> Except txerr (tls, Validated tx) -- apply an unvalidated transaction
     reapplyTx :: lc ->             SlotNo -> Validated tx -> tls -> Except txerr tls     -- apply a previously validated transaction ...
-    ...
+    ...  -- TODO: more methods!
 
 * Consensus code:
 ** ouroboros-consensus/src/Ouroboros/Consensus/Ledger/Basics.hs
@@ -110,6 +111,7 @@ data LedgerResult l a = LedgerResult
   deriving (Foldable, Functor, Traversable)
   
 * Networking code: some basic definitions for Blocks and such
+** ouroboros-network/src/Ouroboros/Network/Block.hs  *A*
 
 data ChainHash b = GenesisHash | BlockHash !(HeaderHash b)  -- Our*.Network.Block
 
@@ -190,7 +192,7 @@ blockNo = headerFieldBlockNo . getHeaderFields
 * TODO improvements/adds
 
 - TODO can you distinguish associated types without the diagram getting *too* busy?
-  - TODO just duplicate the 'type/data family' in the class defn
+  - TODO just duplicate the 'type/data family' in the class defn: find all these cases.
     
 - rendering 
   - be consistent: ascii vs unicode arrows & etc

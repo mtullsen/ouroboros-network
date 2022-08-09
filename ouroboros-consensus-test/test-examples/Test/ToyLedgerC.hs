@@ -12,6 +12,7 @@ module Test.ToyLedgerC where
 import           Data.Set (Set)
 import qualified Data.Set as Set
 import           Data.Void
+import           Data.Word (Word64)
 import           GHC.Generics (Generic)
 
 -- pkg nothunks:
@@ -44,7 +45,7 @@ data PrtclC_IsLeader    = PrtclC_IsLeader    -- Evidence we /are/ leader
 
 data instance ConsensusConfig PrtclC =
   PrtclC_Config { ccpc_iLeadInSlots  :: Set SlotNo
-                , ccpc_securityParam :: SecurityParam
+                , ccpc_securityParam :: SecurityParam  -- i.e., 'k'
                 }
   deriving (Eq, Show)
   deriving NoThunks via OnlyCheckWhnfNamed "PrtclC_Config"
@@ -52,7 +53,7 @@ data instance ConsensusConfig PrtclC =
 
 instance ConsensusProtocol PrtclC where
   
-  type ChainDepState PrtclC = ()   -- FIXME
+  type ChainDepState PrtclC = ()   -- FIXME: want for C
   type IsLeader      PrtclC = PrtclC_IsLeader
   type CanBeLeader   PrtclC = PrtclC_CanBeLeader
   
@@ -61,10 +62,10 @@ instance ConsensusProtocol PrtclC where
   type SelectView    PrtclC = BlockNo
 
   -- | View on the ledger required by the protocol
-  type LedgerView    PrtclC = ()               -- FIXME
+  type LedgerView    PrtclC = ()               -- TODO-D.
   
   -- | View on a block header required for header validation
-  type ValidateView  PrtclC = ()               -- FIXME
+  type ValidateView  PrtclC = ()               -- TODO-D
   type ValidationErr PrtclC = Void
 
   checkIsLeader cfg PrtclC_CanBeLeader slot _tcds =
@@ -88,6 +89,7 @@ pc_config = PrtclC_Config
               , ccpc_securityParam= SecurityParam{maxRollbacks= 1}
               }
 
+
 ---- Block C (for Protocol C) ------------------------------------------------
 
 -- | Define BlockC
@@ -104,8 +106,8 @@ type instance BlockProtocol BlockC = PrtclC
 instance BlockSupportsProtocol BlockC where
   validateView _ _ = ()
   -- selectView   = stub
-  -- this method defaulted.  (MT-TODO: understand.)
-  -- TODO: do we want to use the defalt method in some/all of our pills?
+    -- this method defaulted.  (MT-TODO: understand.)
+    -- Q. do we want to use the default method in some/all of our pills?
 
 
 -- The transaction type for BlockC
@@ -117,25 +119,19 @@ data instance GenTx BlockC = TxC Tx
   deriving (Show, Eq, Generic, Serialise)
   deriving NoThunks via OnlyCheckWhnfNamed "TxC" (GenTx BlockC)
 
-{- OLD:
-newtype instance Validated (GenTx BlockC) =
-  ValidatedGenTxBlockC (GenTx BlockC)
-  deriving (Show, Eq, Generic, Serialise)
-  deriving NoThunks
--}
-
--- TODO: unclear re Validated: does 'Validated a' comprise 'a' or not?
+-- And what it means for the transaction to be Validated (trivial for now)
 
 data instance Validated (GenTx BlockC) = ValidatedTxC
   deriving (Show, Eq, Generic, Serialise)
   deriving NoThunks
 
+
 ---- The Ledger State for Block C --------------------------------------------
 
 data instance LedgerState BlockC =
   LedgerC
-    { lsbc_tip :: Point BlockC -- header hash and slot num; FIXME needed here?
-    , lsbc_cnt :: Int          -- just an up/down counter
+    { lsbc_tip   :: Point BlockC -- header hash and slot num.
+    , lsbc_count :: Word64       -- results of an up/down counter
     }
   deriving (Show, Eq, Generic, Serialise)
   deriving NoThunks via OnlyCheckWhnfNamed "LedgerC" (LedgerState BlockC)
@@ -153,7 +149,7 @@ type instance LedgerCfg (LedgerState BlockC) = ()
 type instance ApplyTxErr BlockC = ()
 
 
----- Now for some class definitions: -----------------------------------------
+---- Now for some class instances --------------------------------------------
 
 instance GetTip (Ticked(LedgerState BlockC)) where
   getTip = stub lsbc_tip
@@ -169,27 +165,46 @@ instance IsLedger (LedgerState BlockC) where
   type instance LedgerErr      (LedgerState BlockC) = LedgerErr_BlockC 
   type instance AuxLedgerEvent (LedgerState BlockC) = ()
 
-  applyChainTickLedgerResult _cfg slotno l =
-    LedgerResult {lrEvents= [], lrResult= tickStub l}
-      -- FIXME: can 'Ticked l' be ()?  not sure of  the context here.
+  applyChainTickLedgerResult _cfg slot ldgrSt =
+    LedgerResult {lrEvents= [], lrResult= tickLedgerStateC slot ldgrSt}
+
+    -- updating the slot, but otherwise no ledger changes. (?)
 
 instance ApplyBlock (LedgerState BlockC) BlockC where
-  applyBlockLedgerResult _lc b (TickedLedgerStateC ldgrSt) =
+  applyBlockLedgerResult ldgrCfg b tickedLdgrSt =
     return $
       LedgerResult { lrEvents= []
-                   , lrResult= stub b
+                   , lrResult= stub -- yada, yada
+                                -- (applyTx ldgrCfg stub slot)
+                                -- tickedLdgrSt
+                                -- (bc_body b)
+                                -- {lsbc_tip= stub} -- TODO
                    } 
-    
+      where
+      slot = stub -- TODO
+
   reapplyBlockLedgerResult _lc b tl =
     LedgerResult {lrEvents= [], lrResult= stub b}          -- FIXME
 
+tickLedgerStateC ::
+  SlotNo -> LedgerState BlockC -> Ticked (LedgerState BlockC)
+tickLedgerStateC slot ldgrSt =
+  -- just update the slot
+  --   and just leave the hash unchanged?  Q. Nick?
+  TickedLedgerStateC ldgrSt{lsbc_tip=BlockPoint slot hash'}
 
--- no methods here, just a roll-up class:
-
+  where
+  hash' = stub       -- FIXME (getting into the weeds here to get working)
+        $ pointHash  -- this might be origin
+        $ lsbc_tip ldgrSt
+  
+        -- See Ouroboros.Network.Block for useful functions
+  
+-- | no methods here, 'UpdateLedger' is a class to roll-up classes:
 instance UpdateLedger BlockC where {}  
 
 instance LedgerSupportsProtocol BlockC where
-  protocolLedgerView _lc tl  = TickedTrivial 
+  protocolLedgerView _lc tl = TickedTrivial 
   ledgerViewForecastAt = stub
                           -- FIXME ^, use trivialForecast?
     -- For PrtclD: want this to be more.
@@ -200,7 +215,7 @@ instance LedgerSupportsMempool BlockC where
 
   applyTx _lc _ slotno tx (TickedLedgerStateC ldgrSt) =
     return ( TickedLedgerStateC 
-               ldgrSt{lsbc_cnt= applyTxC tx (lsbc_cnt ldgrSt)}
+               ldgrSt{lsbc_count= applyTxC tx (lsbc_count ldgrSt)}
            , ValidatedTxC
            )
     where
@@ -242,7 +257,7 @@ data instance Header BlockC =
 
 instance GetHeader BlockC where
   getHeader          = bc_header
-  blockMatchesHeader = \_ _ -> True -- We are not interested in integrity here
+  blockMatchesHeader = \_ _ -> True -- FIXME: be able to fail
   headerIsEBB        = const Nothing
 
 instance GetPrevHash BlockC where
