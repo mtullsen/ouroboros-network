@@ -1,3 +1,4 @@
+
 % Example: Implementing a Simple Protocol Using `ouroborus-consensus`
 
 Introduction and Motivation
@@ -11,9 +12,12 @@ example of some of the high-level concepts in `ouroborus-consensus`
 
 This example uses several extensions:
 
-> {-# LANGUAGE TypeFamilies #-}
-> {-# LANGUAGE DerivingVia  #-}
-> {-# LANGUAGE DataKinds    #-}
+> {-# LANGUAGE TypeFamilies      #-}
+> {-# LANGUAGE DerivingVia       #-}
+> {-# LANGUAGE DataKinds         #-}
+> {-# LANGUAGE DeriveGeneric     #-}
+> {-# LANGUAGE FlexibleInstances #-}
+> {-# LANGUAGE DeriveAnyClass    #-}
 > module Test.Tutorial() where
 
 First, some includes we'll need:
@@ -21,10 +25,14 @@ First, some includes we'll need:
 > import Data.Void(Void)
 > import Data.Set(Set)
 > import qualified Data.Set as Set
+> import NoThunks.Class (NoThunks, OnlyCheckWhnfNamed (..))
+> import GHC.Generics (Generic)
+> import Codec.Serialise (Serialise)
 > import Ouroboros.Consensus.Block.Abstract
 > import Ouroboros.Consensus.Protocol.Abstract
 > import Ouroboros.Consensus.Ticked
-> import NoThunks.Class (NoThunks, OnlyCheckWhnfNamed (..))
+> import Ouroboros.Consensus.Block (BlockSupportsProtocol (selectView, validateView))
+> import Test.Utilities (Hash)
 
 
 The `ConsensusProtocol` typeclass
@@ -229,8 +237,8 @@ In the case of `SP` we don't allow rollback at all.
 
 
 
-Further reading
----------------
+Further reading about Consensus
+-------------------------------
 
 The `ConsensusProtocol` class is also dealt with in some detail
 and with additional context in the
@@ -239,4 +247,164 @@ and with additional context in the
 The `Ouroboros.Consensus.Protocol.Praos` module contains the
 instantiation of `ConsensusProtocol` for Praos.
 
+
+
+
+Blocks: The View From Consensus
+===============================
+
+In the discussion above, the reader may have noticed that we have only
+presented _views_ of some of the things consensus deals with.  This is
+to reduce coupling between `ConsensusProtocol p` and any particular
+block or ledger implementation.
+
+**TODO: more intro material**
+
+To enhance our example we'll implement a simple block
+and ledger that can be used with `SP` that logically keeps track of a
+single number.  Each block contains a list of transactions that either
+increment or decrement the number and at any point in time, and the
+ledger's state can be thought of the net effect of all these
+transactions - in other words, the number of increment transactions
+minus the number of decrement transactions.
+
+Defining the Block
+------------------
+
+We'll start by defining the transaction type - this is what the block
+will contain:
+
+> data Tx = Inc | Dec
+>           deriving (Show, Eq, Generic, Serialise)
+
+Next, we'll define the block itself:
+
+> data BlockC = BlockC { bc_header :: Header BlockC
+>                      , bc_body   :: [Tx]
+>                      }
+>               deriving NoThunks via OnlyCheckWhnfNamed "BlockC" BlockC
+
+Which is to say, a block is just a header (`Header BlockC`) followed by a
+list of transactions (`[Tx]`) - we'll need to instantiate the
+data families `GenTx` and `Header` for `BlockC`.
+
+**TODO: What is `GenTx`?**
+
+We'll deal with `Header BlockC` in the next section.
+
+Block Headers
+-------------
+
+The block header describes the _structure_ of the block chain - for example
+the hash of this block and that of the block before it. (**TODO: what about genesis?**)
+This corresponds to the `Header` data family (from `Ouroboros.Consensus.Block.Abstract`)
+which we'll instantiate as:
+
+> data instance Header BlockC =
+>   HdrBlockC
+>     { hbc_SlotNo  :: SlotNo
+>     , hbc_BlockNo :: BlockNo
+>     , hbc_Hash    :: HeaderHash BlockC
+>     , hbc_prev    :: ChainHash BlockC
+>     }
+>   deriving stock    (Show, Eq, Generic)
+>   deriving anyclass (Serialise)
+>   deriving NoThunks via OnlyCheckWhnfNamed "HdrBlockC" (Header BlockC)
+
+Because `Header` is a data family, functions using instantiations of this
+family will know nothing about the structure of the data - instead there
+are other typeclasses needed to build an interface to derive things that
+are needed from this value.  We'll implement those typeclases next.
+
+Interface to the Block Header
+-----------------------------
+
+** `GetHeader` **
+
+The `GetHeader` class **TODO: where does it live?**
+describes how to project a header - a value of type `Header BlockC`
+in our example - out of a block representation.  The implementation
+for `getHeader` is fairly straightforward - we can just use the record
+accessor `bc_header`:
+
+> instance GetHeader BlockC where
+>    getHeader          = bc_header
+>    blockMatchesHeader = \_ _ -> True -- TODO: actually implement this function
+>    headerIsEBB        = const Nothing
+
+
+** `GetPrevHash` **
+
+The `GetPrevHash` class contains a function that gets the hash of a
+previous block from the header - which is very simple for `Header BlockC`:
+
+> instance GetPrevHash BlockC where
+>  headerPrevHash = hbc_prev
+
+** `HasHeader` **
+
+The `HasHeader` typeclass has the `getHeaderFields` function which projects the
+information in the header to a `HeaderFields` record containing the slot, block number, and
+block hash.
+
+We implement this both for `Header Block`:
+
+> instance HasHeader (Header BlockC) where
+>   getHeaderFields hdr = HeaderFields
+>                          { headerFieldSlot    = hbc_SlotNo hdr
+>                          , headerFieldBlockNo = hbc_BlockNo hdr
+>                          , headerFieldHash    = hbc_Hash hdr
+>                          }
+
+As well as `BlockC` itself - which calls the `getHeaderFields` defined for `Header BlockC`:
+
+> instance HasHeader BlockC where
+>   getHeaderFields = castHeaderFields
+>                   . getHeaderFields
+>                   . bc_header
+
+**TODO: what are these **
+
+> type instance HeaderHash BlockC = Hash
+
+> instance StandardHash BlockC
+
+Associating the Block and the Prococol
+--------------------------------------
+
+So far, we've made no mention of `SP` in any of the definitions for `BlockC` -
+similarly, we've made no mention of `BlockC` in any of the definitions
+for `SP` we have to implement a few more typeclasses that define
+how the two are associated.
+
+More generally, a block has one and only one type of protocol - but the converse
+is not true - a protocol may have many types of block.  As such, the association
+between the two specifies the protocol for a particular type of block.
+The type family establishing this relationship is the `BlockProtocol` class.
+
+Here, we define the protocol type for `BlockC` as `SP`:
+
+> type instance BlockProtocol BlockC = SP
+
+Also, the other half of `ValidateView SP` needs to be defined as well -
+which is how do we create a value of `ValidateView SP` given a block.  To
+do this, we instantiate the `BlockSupportsProtocol` typeclass.  Note that
+we do not need to say _which_ protocol is supported since there is only
+ever one protocol for a block, again established by our prior instantiation of
+ `BlockProtocol`:
+
+> instance BlockSupportsProtocol BlockC where
+>   validateView _ _ = ()
+
+Given that `ValidateView SP` is of type `()` there is only one possible implementation
+for this typeclass.  Later examples will require more interesting views of the block.
+
+** TODO: More config **
+
+> data instance BlockConfig BlockC = BCfgBlockC
+>                                    deriving (Generic, NoThunks)
+> data instance CodecConfig BlockC = CCfgBlockC
+>                                    deriving (Generic, NoThunks)
+> data instance StorageConfig BlockC = SCfgBlockC
+>                                      deriving (Generic, NoThunks)
 
