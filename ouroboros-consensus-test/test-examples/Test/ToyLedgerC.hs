@@ -9,6 +9,7 @@
 module Test.ToyLedgerC where
 
 -- base pkgs:
+import           Control.Monad
 import           Data.Set (Set)
 import qualified Data.Set as Set
 import           Data.Void
@@ -149,8 +150,15 @@ newtype instance Ticked (LedgerState BlockC) =
 -- No LedgerCfg data:
 type instance LedgerCfg (LedgerState BlockC) = ()
 
+type LedgerErr_BlockC = String
+  
 -- No ApplyTxErr data:
-type instance ApplyTxErr BlockC = ()
+type instance ApplyTxErr BlockC = LedgerErr_BlockC
+
+-- Q. Nick: Is the following supposed to be true, or did I somehow in
+--    this code assume it:
+--
+--      ApplyTxErr BlockC == LedgerErr (LedgerState BlockC)
 
 ---- The Ledger State for Block C: class instances ---------------------------
 
@@ -162,8 +170,6 @@ instance GetTip (LedgerState BlockC) where
 
 -- FIXME: appears you need both the above: both need more "glue"
 
-type LedgerErr_BlockC = String
-  
 instance IsLedger (LedgerState BlockC) where
   type instance LedgerErr      (LedgerState BlockC) = LedgerErr_BlockC 
   type instance AuxLedgerEvent (LedgerState BlockC) = ()
@@ -175,16 +181,19 @@ instance IsLedger (LedgerState BlockC) where
 
 instance ApplyBlock (LedgerState BlockC) BlockC where
   applyBlockLedgerResult ldgrCfg b tickedLdgrSt =
+    do
+    TickedLedgerStateC ldgrSt <-
+      foldM 
+        (\tls tx-> fst <$> applyTx ldgrCfg DoNotIntervene slot tx tls)
+        tickedLdgrSt
+        (bc_body b)
+      
     return $
       LedgerResult { lrEvents= []
-                   , lrResult= stub -- yada, yada
-                                -- (applyTx ldgrCfg DoNotIntervene slot)
-                                -- tickedLdgrSt
-                                -- (bc_body b)
-                                -- {lsbc_tip= stub} -- TODO
+                   , lrResult= ldgrSt
                    } 
-      where
-      slot = stub -- TODO
+    where
+    slot = blockSlot (getHeader b)
 
   reapplyBlockLedgerResult _lc b _tl =
     LedgerResult {lrEvents= [], lrResult= stub b}          -- TODO
