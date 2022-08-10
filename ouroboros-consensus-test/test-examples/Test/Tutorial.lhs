@@ -25,6 +25,7 @@ First, some includes we'll need:
 > import Data.Void(Void)
 > import Data.Set(Set)
 > import qualified Data.Set as Set
+> import Data.Word(Word64)
 > import NoThunks.Class (NoThunks, OnlyCheckWhnfNamed (..))
 > import GHC.Generics (Generic)
 > import Codec.Serialise (Serialise)
@@ -32,7 +33,10 @@ First, some includes we'll need:
 > import Ouroboros.Consensus.Protocol.Abstract
 > import Ouroboros.Consensus.Ticked
 > import Ouroboros.Consensus.Block (BlockSupportsProtocol (selectView, validateView))
+> import Ouroboros.Consensus.Ledger.Abstract
+>
 > import Test.Utilities (Hash)
+> import Ouroboros.Consensus.Ledger.SupportsMempool (ApplyTxErr)
 
 
 The `ConsensusProtocol` typeclass
@@ -395,16 +399,69 @@ ever one protocol for a block, again established by our prior instantiation of
 
 > instance BlockSupportsProtocol BlockC where
 >   validateView _ _ = ()
+>   selectView   _bcfg hdr  = blockNo hdr
 
 Given that `ValidateView SP` is of type `()` there is only one possible implementation
 for this typeclass.  Later examples will require more interesting views of the block.
 
-** TODO: More config **
+** TODO: Describe these configuration classes **
 
 > data instance BlockConfig BlockC = BCfgBlockC
->                                    deriving (Generic, NoThunks)
+>   deriving (Generic, NoThunks)
 > data instance CodecConfig BlockC = CCfgBlockC
->                                    deriving (Generic, NoThunks)
+>   deriving (Generic, NoThunks)
 > data instance StorageConfig BlockC = SCfgBlockC
->                                      deriving (Generic, NoThunks)
+>   deriving (Generic, NoThunks)
 
+
+Consensus and The Ledger
+========================
+
+The _ledger_ specifies a state of the system represented by the blocks
+in a blockchain but also charaterizes what transitions are valid for
+any particular state.
+
+**TODO: more explanation here**
+
+
+Defining the Ledger
+-------------------
+
+Much like `ConsensusProtocol` and its `ConsensusConfig` configuration class,
+the ledger has an associated static configuration which is represented using
+the type family `LedgerCfg`.  For our example, we have nothing
+interesting to configure, thus:
+
+> type instance LedgerCfg (LedgerState BlockC) = ()
+
+Given that the `BlockC` transactions consist of incrementing and decrementing
+a number, we materialize that number in the `LedgerState`.  However,
+we also need to have some notion of _where_ in the blockchain we are
+representing with this number.  Our instantation of `LedgerState` for
+`BlockC` includes both these things.
+
+> data instance LedgerState BlockC =
+>   LedgerC
+>      { lsbc_tip   :: Point BlockC -- header hash and slot num.
+>      , lsbc_count :: Word64       -- results of an up/down counter
+>      }
+>    deriving (Show, Eq, Generic, Serialise)
+>    deriving NoThunks via OnlyCheckWhnfNamed "LedgerC" (LedgerState BlockC)
+
+The `Point` type (defined in `Ouroboros.Network.Block`) describes a particular
+place in the blockchain - a combination of a slot and a block hash.
+
+**TODO: explain exactly what a slot is at this point?**
+
+**TODO: how is a slot given meaning?**
+
+**TODO: `Ticked` refers to a logical clock of some kind - what exactly is this clock in the ledger's case?**
+
+> newtype instance Ticked (LedgerState BlockC) =
+>   TickedLedgerStateC {
+>     unTickedLedgerStateC :: LedgerState BlockC
+>   }
+>   deriving (Show, Eq, Generic, Serialise)
+>   deriving NoThunks
+
+> type instance ApplyTxErr BlockC = ()
