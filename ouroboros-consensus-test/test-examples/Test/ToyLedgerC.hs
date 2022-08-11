@@ -134,41 +134,35 @@ data instance Validated (GenTx BlockC) = ValidatedTxC (GenTx BlockC)
 
 data instance LedgerState BlockC =
   LedgerC
-    { lsbc_tip   :: Point BlockC -- header hash and slot num.
+    { lsbc_tip   :: Point BlockC
+                                 -- Point for the last applied block.
+                                 --  (Point is header hash and slot num)
     , lsbc_count :: Word64       -- results of an up/down counter
     }
-  deriving (Show, Eq, Generic, Serialise)
-  deriving NoThunks via OnlyCheckWhnfNamed "LedgerC" (LedgerState BlockC)
+  deriving (Show, Eq, Generic, Serialise, NoThunks)
 
 newtype instance Ticked (LedgerState BlockC) =
   TickedLedgerStateC {
     unTickedLedgerStateC :: LedgerState BlockC
   }
-  deriving (Show, Eq, Generic, Serialise)
-  deriving NoThunks
+  deriving (Show, Eq, Generic, Serialise, NoThunks)
 
 -- No LedgerCfg data:
 type instance LedgerCfg (LedgerState BlockC) = ()
 
 type LedgerErr_BlockC = String
   
--- No ApplyTxErr data:
 type instance ApplyTxErr BlockC = LedgerErr_BlockC
 
--- Q. Nick: Is the following supposed to be true, or did I somehow in
---    this code assume it:
---
---      ApplyTxErr BlockC == LedgerErr (LedgerState BlockC)
 
 ---- The Ledger State for Block C: class instances ---------------------------
 
-instance GetTip (Ticked(LedgerState BlockC)) where
-  getTip = stub lsbc_tip
+instance GetTip (Ticked (LedgerState BlockC)) where
+  getTip = castPoint . lsbc_tip . unTickedLedgerStateC
 
 instance GetTip (LedgerState BlockC) where
-  getTip = stub lsbc_tip
+  getTip = castPoint . lsbc_tip
 
--- FIXME: appears you need both the above: both need more "glue"
 
 instance IsLedger (LedgerState BlockC) where
   type instance LedgerErr      (LedgerState BlockC) = LedgerErr_BlockC 
@@ -177,7 +171,10 @@ instance IsLedger (LedgerState BlockC) where
   applyChainTickLedgerResult _cfg slot ldgrSt =
     LedgerResult {lrEvents= [], lrResult= tickLedgerStateC slot ldgrSt}
 
-    -- We update the slot, but otherwise no changes to ledger state.
+    -- This method shall not update the tip.
+    -- Note the doc for the class:
+    -- >    ledgerTipPoint (applyChainTick cfg slot st)
+    -- > == ledgerTipPoint st
 
 instance ApplyBlock (LedgerState BlockC) BlockC where
   applyBlockLedgerResult ldgrCfg b tickedLdgrSt =
@@ -199,20 +196,11 @@ instance ApplyBlock (LedgerState BlockC) BlockC where
     LedgerResult {lrEvents= [], lrResult= stub b}          -- TODO
 
 -- | tickLedgerStateC - helper function to tick the LedgerState
+--     currently this is effectively a NOP.  [TODO!]
+
 tickLedgerStateC ::
   SlotNo -> LedgerState BlockC -> Ticked (LedgerState BlockC)
-tickLedgerStateC slot ldgrSt =
-  -- just update the slot
-  --  - But leave the hash unchanged?!  Q. Nick?
-  TickedLedgerStateC ldgrSt{lsbc_tip=BlockPoint slot hash'}
-
-  where
-  hash' = stub       -- FIXME (getting into the weeds here to get working)
-        $ pointHash  -- this might be origin
-        $ lsbc_tip ldgrSt
-  
-        -- Nick: is there a simpler, more idiomatic way to do this?
-        -- See Ouroboros.Network.Block for useful functions
+tickLedgerStateC _slot ldgrSt = TickedLedgerStateC ldgrSt
   
 -- | no methods here, 'UpdateLedger' is a class to roll-up classes:
 instance UpdateLedger BlockC where {}  
@@ -221,14 +209,14 @@ instance LedgerSupportsProtocol BlockC where
   protocolLedgerView _lcfg  _tl = TickedTrivial 
 
   ledgerViewForecastAt _lccf _l = stub
-                          -- FIXME ^, use trivialForecast?  Nick?
+                          -- FIXME: use trivialForecast.
     -- For Prtcl D: want this to be more.
     
 instance LedgerSupportsMempool BlockC where
   
   txInvariant _tx = True   -- same as default method
 
-  applyTx _lc _wti slot tx (TickedLedgerStateC ldgrSt) =
+  applyTx _lc _wti _slot tx (TickedLedgerStateC ldgrSt) =
     return ( TickedLedgerStateC 
                ldgrSt{lsbc_count= applyTxC tx (lsbc_count ldgrSt)}
            , ValidatedTxC tx -- no evidence being provided now.
