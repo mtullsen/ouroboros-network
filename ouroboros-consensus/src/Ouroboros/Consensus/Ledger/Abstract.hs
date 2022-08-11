@@ -189,7 +189,7 @@ refoldLedger = repeatedly . tickThenReapply
   Short-hand
 -------------------------------------------------------------------------------}
 
--- | Wrapper around 'ledgerTipPoint' that uses a proxy to fix @blk@
+-- | Wrapper around 'getTip' that uses a proxy to fix @blk@
 --
 -- This is occassionally useful to guide type inference
 ledgerTipPoint ::
