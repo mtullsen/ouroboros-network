@@ -18,9 +18,9 @@ TYPE-FAMILIES (standalone and associated types, using implicit "kinds" P,B,L):
                                     b ──(StorageConfig :: B→*)──────▶ sc     -- other config [?]
                                     b ──(Header        :: B→*)──────▶ hdr    -- link block to its header
                                     
-                                                b,l ──(HeaderHash :: *→*)──────▶ hash   -- link block/ledger/? to a hash
+                                                b,l ──(HeaderHash :: *→*)──────▶ hash   -- link block/ledger to a hash
 
-    p ──(ChainDepState :: P→*)──> cds     -- protocol specific state (part that depends on the chain), may rollback
+    p ──(ChainDepState :: P→*)──> cds     -- protocol specific state (part that depends on the chain), would rollback when chain does
     p ──(IsLeader      :: P→*)──> isldr   -- evidence that a node /is/ the leader
     p ──(CanBeLeader   :: P→*)──> cbldr   -- evidence that we /can/ be leader
     p ──(SelectView    :: P→*)──> selvw   -- projection of header used for chain selection (using 'Ord selvw'); often 'BlockNo'
@@ -33,7 +33,7 @@ TYPE-FAMILIES (standalone and associated types, using implicit "kinds" P,B,L):
                                     b ───(GenTx :: B→*)────────────────────────▶ tx      -- generalized transactions
                                     b ───(ApplyTxErr :: B→*)───────────────────▶ txerr   -- errors
 
-                                    b,tx ───(Validated :: *→*)─────────────────▶ valb,valtx  -- add proof of validity to b,tx;  TODO: correct?
+                                    b,tx ───(Validated :: *→*)─────────────────▶ valb,valtx  -- add proof of validity to b,tx
                                     
 TYPE-CONSTRUCTORS (that are type-generic, as they use type families):  [not exhaustive!]
 
@@ -65,39 +65,39 @@ TYPE-CLASSES:
                               class (HasHeader b, GetHeader b) => GetPrevHash b where   
                                 headerPrevHash :: Header b → ChainHash b       -- get the hash of predecessor
   
-                                                class GetTip l where                             -- TODO: this work on more than 'l'?
-                                                  getTip :: l → Point l
-
-                                                class (GetTip l, GetTip (Ticked l)) => IsLedger l where
-                                                  type family LedgerErr l      :: Type                   
-                                                  type family AuxLedgerEvent l :: Type
-                                                  applyChainTickLedgerResult   :: lc → SlotNo → l → LedgerResult l (Ticked l)
-                                                                                  -- apply "slot based" ledger transformation
-
-                              -- BlockSupportsProtocol b - can we construct the views on block 'b' required by protocol 'p'
-                              class (GetPrevHash b, ConsensusProtocol p) => BlockSupportsProtocol b where              -- [[FN2]]
+                              -- construct the two views on block 'b' required by protocol 'p'
+                              class (GetPrevHash b, ConsensusProtocol p) => BlockSupportsProtocol b where              
                                 validateView :: bc → Header b → ValidateView p  -- project from hdr for hdr validation, [[FN1]]
                                 selectView   :: bc → Header b → SelectView p    -- project from hdr for chain selection
                                     
-  class (IsLedger l, HeaderHash l ~ HeaderHash b, HasHeader b, HasHeader (Header b)) => ApplyBlock l b where
-    applyBlockLedgerResult   :: lc → b → Ticked l → Except (LedgerErr l) (LedgerResult l l)  
-    reapplyBlockLedgerResult :: lc → b → Ticked l → LedgerResult l l
-    
-  class ApplyBlock (LedgerState b) b => UpdateLedger b where
-    {}
+    class GetTip l where                           -- l has "kinds" 'L' and 'Ticked Ledger'
+      getTip :: l → Point l                          -- Point of the most recently applied block
 
-  -- | Link protocol to ledger
-  class (BlockSupportsProtocol b, UpdateLedger b, ValidateEnvelope b) => LedgerSupportsProtocol b where
-    protocolLedgerView   :: lc → Ticked l → Ticked ledvw   -- 'ledvw' ('LedgerView (BlockProtocol b)') extracted from the ledger
-    ledgerViewForecastAt :: lc → l → Forecast ledvw        -- Get a forecast at the given ledger state.
+    class (GetTip l, GetTip (Ticked l)) => IsLedger l where
+      type family LedgerErr l      :: Type                   
+      type family AuxLedgerEvent l :: Type
+      applyChainTickLedgerResult   :: lc → SlotNo → l → LedgerResult l (Ticked l)   -- apply "slot based" state transformations (tip unchanged)
+          -- Q. assume this is forward-time
+          
+    class (IsLedger l, HeaderHash l ~ HeaderHash b, HasHeader b, HasHeader (Header b)) => ApplyBlock l b where
+      applyBlockLedgerResult   :: lc → b → Ticked l → Except (LedgerErr l) (LedgerResult l l)  
+      reapplyBlockLedgerResult :: lc → b → Ticked l → LedgerResult l l
       
-  class (UpdateLedger b) => LedgerSupportsMempool b where
-    txInvariant :: GenTx b → Bool                                                -- check if internal invariants of the transaction hold
-    applyTx   :: lc → WhetherToIntervene → SlotNo → tx → tls → Except txerr (tls, Validated tx)      -- apply an unvalidated transaction
-    reapplyTx :: lc →             SlotNo → Validated tx → tls → Except txerr tls         -- apply a previously validated transaction ...
-    txsMaxBytes :: tls → Word32                                   -- max number of bytes of transactions that can be put into a block    
-    txInBlockSize :: tx → Word32                                  -- post-serialisation size in bytes of a 'GenTx b'  [name?!]
-    txForgetValidated :: Validated tx → tx                        -- discard the evidence that transaction has been previously validated     
+    class ApplyBlock (LedgerState b) b => UpdateLedger b where
+      {}
+
+    -- | Link protocol to ledger
+    class (BlockSupportsProtocol b, UpdateLedger b, ValidateEnvelope b) => LedgerSupportsProtocol b where
+      protocolLedgerView   :: lc → Ticked l → Ticked ledvw   -- 'ledvw' ('LedgerView (BlockProtocol b)') extracted from the ledger
+      ledgerViewForecastAt :: lc → l → Forecast ledvw        -- get a forecast at the given ledger state.
+        
+    class (UpdateLedger b) => LedgerSupportsMempool b where
+      txInvariant :: GenTx b → Bool                                                -- check if internal invariants of the transaction hold
+      applyTx   :: lc → WhetherToIntervene → SlotNo → tx → tls → Except txerr (tls, Validated tx)      -- apply an unvalidated transaction
+      reapplyTx :: lc →             SlotNo → Validated tx → tls → Except txerr tls         -- apply a previously validated transaction ...
+      txsMaxBytes :: tls → Word32                                   -- max number of bytes of transactions that can be put into a block    
+      txInBlockSize :: tx → Word32                                  -- post-serialisation size in bytes of a 'GenTx b'
+      txForgetValidated :: Validated tx → tx                        -- discard the evidence that transaction has been previously validated     
 
 * Key Consensus code:
 ** ouroboros-consensus/src/Ouroboros/Consensus/Ledger/Basics.hs
@@ -185,8 +185,6 @@ blockNo = headerFieldBlockNo . getHeaderFields
   header.  Thus we do not download blocks whose headers fail this validation.  See Ouroboros/Consensus/HeaderValidation.hs in which
   the 'validateView' method is called.
   
-- <<FN2>> Appears that 'GetHeader b' is redundant in BlockSupportsProtocol class.
-
 - <<FN3>> Regarding 'lev': note that 'LedgerResult l l' includes 'lev'
   
 - Note that 'b' (block) determines the 'l' ledger type.  Note 5.1.1 in [[CCASL:]] "Nonetheless, a ledger can only be used with a single
@@ -195,15 +193,17 @@ blockNo = headerFieldBlockNo . getHeaderFields
 
 * TODO improvements/adds
 
-- TODO can you distinguish associated types without the diagram getting *too* busy?
+- distinguish associated types: ?
   - TODO just duplicate the 'type/data family' in the class defn: find all these cases.
   - TODO put a note at the top on the 7 protocol associated type families
         
 - rendering 
-  - be consistent: ascii vs unicode arrows & etc
-  - group the classes with gray borders
+  - group the "closely related" classes with gray borders
   - ?
     
 - make note of the *few* type constructors in the above signatures
   - or put into a separate font?
   
+- code notes/
+  - names:
+    - txInBlockSize
