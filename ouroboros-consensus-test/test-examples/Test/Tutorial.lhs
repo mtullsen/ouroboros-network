@@ -12,12 +12,13 @@ example of some of the high-level concepts in `ouroboros-consensus`
 
 This example uses several extensions:
 
-> {-# LANGUAGE TypeFamilies      #-}
-> {-# LANGUAGE DerivingVia       #-}
-> {-# LANGUAGE DataKinds         #-}
-> {-# LANGUAGE DeriveGeneric     #-}
-> {-# LANGUAGE FlexibleInstances #-}
-> {-# LANGUAGE DeriveAnyClass    #-}
+> {-# LANGUAGE TypeFamilies       #-}
+> {-# LANGUAGE DerivingVia        #-}
+> {-# LANGUAGE DataKinds          #-}
+> {-# LANGUAGE DeriveGeneric      #-}
+> {-# LANGUAGE FlexibleInstances  #-}
+> {-# LANGUAGE DeriveAnyClass     #-}
+> {-# LANGUAGE StandaloneDeriving #-}
 > module Test.Tutorial() where
 
 First, some includes we'll need:
@@ -61,7 +62,6 @@ The static configuration for `SP` is defined by defining an instance for the
 > data instance ConsensusConfig SP =
 >  SP_Config  { cfgsp_slotsLedByMe :: Set SlotNo
 >             }
->             deriving NoThunks via OnlyCheckWhnfNamed "SP_Config" (ConsensusConfig SP)
 
 Next, we instantiate the `ConsensusProtocol` for `SP`:
 
@@ -286,7 +286,6 @@ Next, we'll define the block itself:
 > data BlockC = BlockC { bc_header :: Header BlockC
 >                      , bc_body   :: [Tx]
 >                      }
->               deriving NoThunks via OnlyCheckWhnfNamed "BlockC" BlockC
 
 Which is to say, a block is just a header (`Header BlockC`) followed by a
 list of transactions (`[Tx]`) - we'll need to instantiate the
@@ -313,7 +312,6 @@ which we'll instantiate as:
 >     }
 >   deriving stock    (Show, Eq, Generic)
 >   deriving anyclass (Serialise)
->   deriving NoThunks via OnlyCheckWhnfNamed "HdrBlockC" (Header BlockC)
 
 Because `Header` is a data family, functions using instantiations of this
 family will know nothing about the structure of the data - instead there
@@ -446,7 +444,6 @@ representing with this number.  Our instantiation of `LedgerState` for
 >      , lsbc_count :: Word64       -- results of an up/down counter
 >      }
 >    deriving (Show, Eq, Generic, Serialise)
->    deriving NoThunks via OnlyCheckWhnfNamed "LedgerC" (LedgerState BlockC)
 
 The `Point` type (defined in `Ouroboros.Network.Block`) describes a particular
 place in the blockchain - a combination of a slot and a block hash.
@@ -462,6 +459,20 @@ place in the blockchain - a combination of a slot and a block hash.
 >     unTickedLedgerStateC :: LedgerState BlockC
 >   }
 >   deriving (Show, Eq, Generic, Serialise)
->   deriving NoThunks
 
 > type instance ApplyTxErr BlockC = ()
+
+
+Appendix: NoThunks Instances
+============================
+
+**TODO: what is NoThunks and why is it everywhere?**
+
+To focus on the salient ideas of this document, we've put all the derivations
+of `NoThunks` here instead:
+
+> deriving via OnlyCheckWhnfNamed "SP_Config" (ConsensusConfig SP) instance NoThunks (ConsensusConfig SP)
+> deriving via OnlyCheckWhnfNamed "BlockC" BlockC instance NoThunks BlockC
+> deriving via OnlyCheckWhnfNamed "HdrBlockC" (Header BlockC) instance NoThunks (Header BlockC)
+> deriving via OnlyCheckWhnfNamed "LedgerC" (LedgerState BlockC) instance NoThunks (LedgerState BlockC)
+> deriving instance NoThunks (Ticked (LedgerState BlockC))
