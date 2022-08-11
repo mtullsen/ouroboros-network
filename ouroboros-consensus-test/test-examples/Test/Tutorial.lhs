@@ -6,7 +6,7 @@ Introduction and Motivation
 
 This example is a compilable Literate Haskell (`.lhs`) file that
 instantiates the `ConsensusProtocol` typeclass to serve as an
-example of some of the high-level concepts in `ouroborus-consensus`
+example of some of the high-level concepts in `ouroboros-consensus`
 
 **TODO: More**
 
@@ -106,7 +106,7 @@ Let's examine each of these in turn:
 Chain Selection: `SelectView`
 -----------------------------
 
-One of the major decisions when implementing a consenus protocol is encoding a
+One of the major decisions when implementing a consensus protocol is encoding a
 policy for chain selection.  The `SelectView SP` type represents the information
 necessary from a block header to help make this decision.
 
@@ -150,8 +150,8 @@ Protocol State: `ChainDepState`, `ValidateView` and `ValidationErr`
 
 `ChainDepState` describes the state of the protocol that evolves with the chain.
 Note, from [Cardano Consensus and Storage Layer]: ``we are referring to this as
-the “chain dependent state” to emphasise that this is state that evolves with
-the chain, and indeed is subjec to rollback when we switch to alternatives
+the “chain dependent state” to emphasize that this is state that evolves with
+the chain, and indeed is subject to rollback when we switch to alternatives
 forks. This distinguishes it from chain independent state such as evolving
 private keys, which are updated independently from blocks and are not subject to
 rollback.''
@@ -318,7 +318,7 @@ which we'll instantiate as:
 Because `Header` is a data family, functions using instantiations of this
 family will know nothing about the structure of the data - instead there
 are other typeclasses needed to build an interface to derive things that
-are needed from this value.  We'll implement those typeclases next.
+are needed from this value.  We'll implement those typeclasses next.
 
 Interface to the Block Header
 -----------------------------
@@ -373,7 +373,7 @@ As well as `BlockC` itself - which calls the `getHeaderFields` defined for `Head
 
 > instance StandardHash BlockC
 
-Associating the Block and the Prococol
+Associating the Block and the Protocol
 --------------------------------------
 
 So far, we've made no mention of `SP` in any of the definitions for `BlockC` -
@@ -418,7 +418,7 @@ Consensus and The Ledger
 ========================
 
 The _ledger_ specifies a state of the system represented by the blocks
-in a blockchain but also charaterizes what transitions are valid for
+in a blockchain but also characterizes what transitions are valid for
 any particular state.
 
 **TODO: more explanation here**
@@ -437,7 +437,7 @@ interesting to configure, thus:
 Given that the `BlockC` transactions consist of incrementing and decrementing
 a number, we materialize that number in the `LedgerState`.  However,
 we also need to have some notion of _where_ in the blockchain we are
-representing with this number.  Our instantation of `LedgerState` for
+representing with this number.  Our instantiation of `LedgerState` for
 `BlockC` includes both these things.
 
 > data instance LedgerState BlockC =
