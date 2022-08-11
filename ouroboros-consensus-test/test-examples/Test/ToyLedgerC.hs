@@ -54,7 +54,7 @@ data instance ConsensusConfig PrtclC =
 
 instance ConsensusProtocol PrtclC where
   
-  type ChainDepState PrtclC = ()   -- TODO: want more here, for C/D
+  type ChainDepState PrtclC = ()   -- TODO: want more here, for C? for D?
   type IsLeader      PrtclC = PrtclC_IsLeader
   type CanBeLeader   PrtclC = PrtclC_CanBeLeader
   
@@ -238,7 +238,7 @@ instance LedgerSupportsMempool BlockC where
                     slot
                     (txForgetValidated vtx)
                     tls
-    -- in general, this would *not* be an efficient way to implement
+    -- in general, this would *not* be an efficient way to implement reapplyTx
     
   txsMaxBytes _     = 20 -- just a random magic number for now
   txInBlockSize _tx = 2  -- post serialization size of 'tx' 
