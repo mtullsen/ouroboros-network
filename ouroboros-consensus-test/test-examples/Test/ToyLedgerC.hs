@@ -168,13 +168,17 @@ instance IsLedger (LedgerState BlockC) where
   type instance LedgerErr      (LedgerState BlockC) = LedgerErr_BlockC 
   type instance AuxLedgerEvent (LedgerState BlockC) = ()
 
+  -- | This method is for updating the ledger state when it needs to change
+  -- based on time (slot) changing.  In this case, nothing needs to be done.
+  -- 
+  -- This method shall not update the tip.
+  -- Note the doc for the class:
+  -- 
+  -- >    ledgerTipPoint (applyChainTick cfg slot st)
+  -- > == ledgerTipPoint st
+
   applyChainTickLedgerResult _cfg slot ldgrSt =
     LedgerResult {lrEvents= [], lrResult= tickLedgerStateC slot ldgrSt}
-
-    -- This method shall not update the tip.
-    -- Note the doc for the class:
-    -- >    ledgerTipPoint (applyChainTick cfg slot st)
-    -- > == ledgerTipPoint st
 
 instance ApplyBlock (LedgerState BlockC) BlockC where
   applyBlockLedgerResult ldgrCfg b tickedLdgrSt =
@@ -284,9 +288,6 @@ instance GetHeader BlockC where
 
 instance GetPrevHash BlockC where
   headerPrevHash = hbc_prev
-
--- CODE-NOTE: one might like "HasHeaderData/HasHeaderFields" as a slightly
--- less misleading name for the 'HasHeader' class
 
 instance HasHeader (Header BlockC) where
   getHeaderFields hdr = HeaderFields
