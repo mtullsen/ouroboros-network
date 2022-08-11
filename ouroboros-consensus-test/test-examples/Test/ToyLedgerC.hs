@@ -54,7 +54,7 @@ data instance ConsensusConfig PrtclC =
 
 instance ConsensusProtocol PrtclC where
   
-  type ChainDepState PrtclC = ()   -- FIXME: want more here, for C
+  type ChainDepState PrtclC = ()   -- TODO: want more here, for C/D
   type IsLeader      PrtclC = PrtclC_IsLeader
   type CanBeLeader   PrtclC = PrtclC_CanBeLeader
   
@@ -86,7 +86,7 @@ instance ConsensusProtocol PrtclC where
 
 pc_config :: ConsensusConfig PrtclC
 pc_config = PrtclC_Config
-              { ccpc_iLeadInSlots = Set.empty -- never a leader, FIXME
+              { ccpc_iLeadInSlots = Set.empty -- NOTE: never a leader.
               , ccpc_securityParam= SecurityParam{maxRollbacks= 1}
               }
 
@@ -197,11 +197,11 @@ instance ApplyBlock (LedgerState BlockC) BlockC where
     slot = blockSlot (getHeader b)
 
   reapplyBlockLedgerResult _lc b _tl =
-    LedgerResult {lrEvents= [], lrResult= stub b}          -- TODO
+    LedgerResult {lrEvents= [], lrResult= stub b}
+    -- TODO: fill in; though this would be boilerplate.
 
 -- | tickLedgerStateC - helper function to tick the LedgerState
---     currently this is effectively a NOP.  [TODO!]
-
+--     currently this is effectively a NOP.  [TODO for Protocol D!]
 tickLedgerStateC ::
   SlotNo -> LedgerState BlockC -> Ticked (LedgerState BlockC)
 tickLedgerStateC _slot ldgrSt = TickedLedgerStateC ldgrSt
@@ -212,9 +212,9 @@ instance UpdateLedger BlockC where {}
 instance LedgerSupportsProtocol BlockC where
   protocolLedgerView _lcfg  _tl = TickedTrivial 
 
-  ledgerViewForecastAt _lccf _l = stub
-                          -- FIXME: use trivialForecast.
-    -- For Prtcl D: want this to be more.
+  ledgerViewForecastAt _lccf = trivialForecast
+    -- This is all that's needed, as 'LedgerView PrtclC' is '()'.
+    -- TODO: For Prtcl D: want this to be more.
     
 instance LedgerSupportsMempool BlockC where
   
@@ -225,10 +225,9 @@ instance LedgerSupportsMempool BlockC where
                ldgrSt{lsbc_count= applyTxC tx (lsbc_count ldgrSt)}
            , ValidatedTxC tx -- no evidence being provided now.
            )
-      -- FIXME: Assuming we need to call 'tickLedgerStateC', and thus
-      -- use 'slot'.  Right Nick?
     
     where
+      
     -- the essence of Txs affecting ledger state:
     applyTxC (TxC Inc) i = i+1  
     applyTxC (TxC Dec) i = i-1
@@ -248,7 +247,7 @@ instance LedgerSupportsMempool BlockC where
                          -- CODE-NOTE: somewhat misleading name for method
                      
   txForgetValidated (ValidatedTxC tx) = tx
-    -- remove evidence of validation
+    -- remove evidence of validation (currently non-existent)
 
 ---- Let's just ignore these for now -----------------------------------------
 
@@ -283,7 +282,7 @@ data instance Header BlockC =
 
 instance GetHeader BlockC where
   getHeader          = bc_header
-  blockMatchesHeader = \_ _ -> True -- FIXME: be able to fail
+  blockMatchesHeader = \_ _ -> True -- TODO: Prtcl C/D be able to fail
   headerIsEBB        = const Nothing
 
 instance GetPrevHash BlockC where

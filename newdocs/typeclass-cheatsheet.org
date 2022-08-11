@@ -19,7 +19,7 @@ TYPE-FAMILIES (standalone and associated types, using implicit "kinds" P,B,L):
                                     b ──(Header        :: B→*)──────▶ hdr    -- link block to its header
                                     
                                                 b,l ──(HeaderHash :: *→*)──────▶ hash   -- link block/ledger to a hash
-
+                          
     p ──(ChainDepState :: P→*)──> cds     -- protocol specific state (part that depends on the chain), would rollback when chain does
     p ──(IsLeader      :: P→*)──> isldr   -- evidence that a node /is/ the leader
     p ──(CanBeLeader   :: P→*)──> cbldr   -- evidence that we /can/ be leader
@@ -35,8 +35,10 @@ TYPE-FAMILIES (standalone and associated types, using implicit "kinds" P,B,L):
 
                                     b,tx ───(Validated :: *→*)─────────────────▶ valb,valtx  -- add proof of validity to b,tx
                                     
-TYPE-CONSTRUCTORS (that are type-generic, as they use type families):  [not exhaustive!]
+TYPE-CONSTRUCTORS (that are type-generic, as their definitions apply type families):  [not exhaustive!]
 
+                                    b ────(Point :: B→*)───────────▶ point    -- newtype ... -- a point on the chain: hash & slotno
+                                    
                                     b ────(LedgerConfig :: B→*)───────────▶ lc    -- type LedgerConfig b = LedgerCfg (LedgerState b)
                                     b ────(LedgerError  :: B→*)───────────▶ lerr  -- type LedgerError  b = LedgerErr (LedgerState b)
                                     b ────(TickedLedgerState :: B→*)──────▶ tls   -- type TickedLedgerState b = Ticked (LedgerState b)
@@ -49,7 +51,7 @@ TYPE-CLASSES:
  class Ord (SelectView p) => ConsensusProtocol p where
    type family {ChainDepState, IsLeader, CanBeLeader, SelectView, LedgerView, ValidationErr, ValidateView} :: P → *
    checkIsLeader         :: cc → cbldr → SlotNo → Ticked cds → Maybe isldr        -- 'Just evidence' when we can lead this slot
-   tickChainDepState     :: cc → Ticked ledvw → SlotNo → cds → Ticked cds         -- tick the 'cds' to the SlotNo
+   tickChainDepState     :: cc → Ticked ledvw → SlotNo → cds → Ticked cds         -- update the 'cds' based on passage of time (SlotNo)
    updateChainDepState   :: cc → valvw → SlotNo → Ticked cds → Except valerr cds  -- apply header to 'cds' (may error)
    reupdateChainDepState :: cc → valvw → SlotNo → Ticked cds → cds                -- re-apply header to 'cds' (never errors)
    protocolSecurityParam :: cc → SecurityParam                                    -- get security parameter 'k'
@@ -70,18 +72,17 @@ TYPE-CLASSES:
                                 validateView :: bc → Header b → ValidateView p  -- project from hdr for hdr validation, [[FN1]]
                                 selectView   :: bc → Header b → SelectView p    -- project from hdr for chain selection
                                     
-    class GetTip l where                           -- l has "kinds" 'L' and 'Ticked Ledger'
-      getTip :: l → Point l                          -- Point of the most recently applied block
+    class GetTip l where                         
+      getTip :: l → Point l               -- Point of the most recently applied block
 
     class (GetTip l, GetTip (Ticked l)) => IsLedger l where
       type family LedgerErr l      :: Type                   
       type family AuxLedgerEvent l :: Type
       applyChainTickLedgerResult   :: lc → SlotNo → l → LedgerResult l (Ticked l)   -- apply "slot based" state transformations (tip unchanged)
-          -- Q. assume this is forward-time
           
     class (IsLedger l, HeaderHash l ~ HeaderHash b, HasHeader b, HasHeader (Header b)) => ApplyBlock l b where
       applyBlockLedgerResult   :: lc → b → Ticked l → Except (LedgerErr l) (LedgerResult l l)  
-      reapplyBlockLedgerResult :: lc → b → Ticked l → LedgerResult l l
+      reapplyBlockLedgerResult :: lc → b → Ticked l →                       LedgerResult l l
       
     class ApplyBlock (LedgerState b) b => UpdateLedger b where
       {}
@@ -94,7 +95,7 @@ TYPE-CLASSES:
     class (UpdateLedger b) => LedgerSupportsMempool b where
       txInvariant :: GenTx b → Bool                                                -- check if internal invariants of the transaction hold
       applyTx   :: lc → WhetherToIntervene → SlotNo → tx → tls → Except txerr (tls, Validated tx)      -- apply an unvalidated transaction
-      reapplyTx :: lc →             SlotNo → Validated tx → tls → Except txerr tls         -- apply a previously validated transaction ...
+      reapplyTx :: lc →            SlotNo → Validated tx → tls → Except txerr tls          -- apply a previously validated transaction ...
       txsMaxBytes :: tls → Word32                                   -- max number of bytes of transactions that can be put into a block    
       txInBlockSize :: tx → Word32                                  -- post-serialisation size in bytes of a 'GenTx b'
       txForgetValidated :: Validated tx → tx                        -- discard the evidence that transaction has been previously validated     
