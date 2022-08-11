@@ -8,6 +8,7 @@ import           Test.Tasty.QuickCheck
 import           Test.Tutorial
 import           Test.Example
 import           Test.ToyLedgerC
+import           Test.ToyLedgerD
 import           Test.ToyLedger1 -- defunct?
 
 main :: IO ()
