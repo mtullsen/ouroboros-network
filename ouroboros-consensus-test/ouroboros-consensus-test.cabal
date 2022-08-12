@@ -324,6 +324,7 @@ test-suite test-examples
   build-depends:       base
                      , QuickCheck
                      , containers
+                     , mtl
                      
                      , tasty
                      , tasty-quickcheck

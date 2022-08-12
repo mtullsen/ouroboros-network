@@ -10,6 +10,7 @@ module Test.ToyLedgerD where
 
 -- base pkgs:
 import           Control.Monad
+import           Control.Monad.Except
 import           Data.Set (Set)
 import qualified Data.Set as Set
 import           Data.Void
@@ -277,9 +278,9 @@ instance LedgerSupportsProtocol BlockD where
     Forecast { forecastAt= at
              , forecastFor= \for->
                  if NotOrigin for < at then
-                    error "precondition violated"
+                    error "panic: precondition violated"
                  else if for >= maxFor then
-                   stub $                               -- TODO
+                   throwError $                      
                      OutsideForecastRange
                         { outsideForecastAt    = at
                         , outsideForecastMaxFor= maxFor
