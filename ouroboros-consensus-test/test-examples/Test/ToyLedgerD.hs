@@ -120,6 +120,7 @@ isLeader nodeId (SlotNo slot) (TickedChainDepStateD (LVD x)) =
     0 -> slot `mod` 10      == nodeId  -- nodes [0..9]   do a round-robin
     1 -> (slot `mod` 10)+10 == nodeId  -- nodes [10..19] do a round-robin
     _ -> error "panic: the impossible ..."
+
          
 ---- Block D (for Protocol D) ------------------------------------------------
 
@@ -253,14 +254,11 @@ instance ApplyBlock (LedgerState BlockD) BlockD where
       
     return $
       LedgerResult { lrEvents= []
-                   , lrResult= ldgrSt
+                   , lrResult= ldgrSt{lsbd_tip= blockPoint b}
                    }
     where
     slot = blockSlot (getHeader b)
 
-    -- NOTE: the tick function does not update tip!
-    -- FIXME: update lsbd_tip!
-    
   reapplyBlockLedgerResult _lc b _tl =
     LedgerResult { lrEvents= []
                  , lrResult= stub b
