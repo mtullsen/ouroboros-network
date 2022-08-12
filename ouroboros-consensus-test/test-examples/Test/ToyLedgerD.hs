@@ -112,13 +112,14 @@ tickChainDepState' :: Ticked LedgerViewD -> Ticked ChainDepStateD
 tickChainDepState' (TickedLedgerViewD lv) = TickedChainDepStateD lv
     
 
--- | A somewhat fanciful leadership schedule, each epoch chooses a different 10
---   nodes to do a round-robin schedule:
+-- | A somewhat fanciful leadership schedule, each epoch chooses a particular
+--   set of 10 nodes to do a round-robin schedule. This set is based on whether
+--   our ledger state (a single counter) is odd or even.
 isLeader :: Word64 -> SlotNo -> Ticked ChainDepStateD -> Bool
-isLeader nodeId (SlotNo slot) (TickedChainDepStateD (LVD x)) =
-  case x `mod` 2 of
-    0 -> slot `mod` 10      == nodeId  -- nodes [0..9]   do a round-robin
-    1 -> (slot `mod` 10)+10 == nodeId  -- nodes [10..19] do a round-robin
+isLeader nodeId (SlotNo slot) (TickedChainDepStateD (LVD cntr)) =
+  case cntr `mod` 2 of
+    0 -> slot `mod` 10      == nodeId  -- nodes [0..9]   do a round-robin (even cntr)
+    1 -> (slot `mod` 10)+10 == nodeId  -- nodes [10..19] do a round-robin (odd cntr)
     _ -> error "panic: the impossible ..."
 
          
