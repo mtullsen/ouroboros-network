@@ -90,7 +90,7 @@ TYPE-CLASSES:
     -- | Link protocol to ledger
     class (BlockSupportsProtocol b, UpdateLedger b, ValidateEnvelope b) => LedgerSupportsProtocol b where
       protocolLedgerView   :: lc → Ticked l → Ticked ledvw   -- 'ledvw' ('LedgerView (BlockProtocol b)') extracted from the ledger
-      ledgerViewForecastAt :: lc → l → Forecast ledvw        -- get a forecast at the given ledger state.
+      ledgerViewForecastAt :: lc → l → Forecast ledvw        -- get a forecast (of future 'ledvw's) from a given ledger state.
         
     class (UpdateLedger b) => LedgerSupportsMempool b where
       txInvariant :: GenTx b → Bool                                                -- check if internal invariants of the transaction hold
@@ -101,6 +101,16 @@ TYPE-CLASSES:
       txForgetValidated :: Validated tx → tx                        -- discard the evidence that transaction has been previously validated     
 
 * Key Consensus code:
+** ouroboros-consensus/src/Ouroboros/Consensus/Forecast.hs
+
+-- | Forecast the effect of time ticking
+data Forecast a = Forecast {
+      forecastAt  :: WithOrigin SlotNo
+
+      -- Precondition: @At s >= forecastAt@
+    , forecastFor :: SlotNo -> Except OutsideForecastRange (Ticked a)
+    }
+    
 ** ouroboros-consensus/src/Ouroboros/Consensus/Ledger/Basics.hs
 
 -- | The result of invoke a ledger function that does validation
@@ -113,6 +123,18 @@ data LedgerResult l a = LedgerResult
   , lrResult :: !a
   }
   deriving (Foldable, Functor, Traversable)
+
+
+* Key cardano-base code:
+** slotting/src/Cardano/Slotting/Slot.hs
+
+data WithOrigin t = Origin | At !t
+
+-- | The 0-based index for the Ourboros time slot.
+newtype SlotNo = SlotNo {unSlotNo :: Word64}
+  deriving stock (Eq, Ord, Generic)
+  deriving Show via Quiet SlotNo
+  deriving newtype (Enum, Bounded, Num, NFData, Serialise, NoThunks, ToJSON, FromJSON)
   
 * Key Networking code: some basic definitions for Blocks and related
 ** ouroboros-network/src/Ouroboros/Network/Block.hs 
