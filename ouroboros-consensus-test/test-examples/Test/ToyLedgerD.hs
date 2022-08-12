@@ -261,8 +261,10 @@ instance ApplyBlock (LedgerState BlockD) BlockD where
     -- FIXME: update lsbd_tip!
     
   reapplyBlockLedgerResult _lc b _tl =
-    LedgerResult {lrEvents= [], lrResult= stub b}
-    -- TODO: fill in; though this would be primarily boilerplate.
+    LedgerResult { lrEvents= []
+                 , lrResult= stub b
+                 }
+    -- TODO(low-priority): fill in; though this would be primarily boilerplate.
     -- 
     -- ASIDE:
     --   We're not planning to implement this "realistically", i.e., to make
@@ -368,7 +370,7 @@ instance BasicEnvelopeValidation BlockD where {}
 ---- Data --------------------------------------------------------------------
 
 blockD :: BlockD
-blockD = BlockD { bd_header= HdrBlockD stub stub stub stub -- TODO
+blockD = BlockD { bd_header= HdrBlockD stub stub stub stub -- TODO(low-priority)
                 , bd_body  = [TxD Inc, TxD Inc]
                 }
 
