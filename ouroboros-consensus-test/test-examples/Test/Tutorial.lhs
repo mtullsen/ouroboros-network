@@ -446,8 +446,8 @@ interesting to configure, thus:
 
 > type instance LedgerCfg (LedgerState BlockC) = ()
 
-`LedgerState`
--------------
+`LedgerState` - The Value Computed by the Blockchain
+----------------------------------------------------
 
 `LedgerState` is a family which logically represents the value computed by
 the blockchain.  Put another way, it's a value derived from observing the
@@ -488,9 +488,8 @@ an `Identity` functor:
 `IsLedger`
 ----------
 
-The `IsLedger` class describes some of the basic functionality of a ledger
-independent of any particular type of block:
-
+The `IsLedger` class describes some of the basic functionality and associated
+types for a ledger.  Though we are here using
 > instance IsLedger (LedgerState BlockC) where
 >   type instance LedgerErr      (LedgerState BlockC) = ()
 >   type instance AuxLedgerEvent (LedgerState BlockC) = ()
