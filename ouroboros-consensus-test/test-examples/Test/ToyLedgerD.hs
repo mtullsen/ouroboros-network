@@ -11,8 +11,6 @@ module Test.ToyLedgerD where
 -- base pkgs:
 import           Control.Monad
 import           Control.Monad.Except
-import           Data.Set (Set)
-import qualified Data.Set as Set
 import           Data.Void
 import           Data.Word (Word64)
 import           GHC.Generics (Generic)
@@ -104,7 +102,9 @@ data ChainDepStateD = ChainDepStateD
 
 -- | Our Ticked ChainDepStateD must contain the LedgerViewD, this allows us to
 --   base the leadership schedule on the LedgerState (at the last epoch boundary).
-data instance Ticked ChainDepStateD = TickedChainDepStateD LedgerViewD
+data instance Ticked ChainDepStateD =
+     TickedChainDepStateD LedgerViewD
+     deriving (Eq,Show,Generic,NoThunks)
 
 -- | A rather degenerate tickChainDepState function, but here we simply want to
 --   extract the relevant LedgerView data into our Ticked ChainDepState:
@@ -115,11 +115,11 @@ tickChainDepState' (TickedLedgerViewD lv) = TickedChainDepStateD lv
 -- | A somewhat fanciful leadership schedule, each epoch chooses a different 10
 --   nodes to do a round-robin schedule:
 isLeader :: Word64 -> SlotNo -> Ticked ChainDepStateD -> Bool
-isLeader nodeId (SlotNo slot) (TickedChainDepStateD x) =
+isLeader nodeId (SlotNo slot) (TickedChainDepStateD (LVD x)) =
   case x `mod` 2 of
     0 -> slot `mod` 10      == nodeId  -- nodes [0..9]   do a round-robin
     1 -> (slot `mod` 10)+10 == nodeId  -- nodes [10..19] do a round-robin
-
+    _ -> error "panic: the impossible ..."
          
 ---- Block D (for Protocol D) ------------------------------------------------
 
@@ -198,11 +198,12 @@ newtype instance Ticked (LedgerState BlockD) =
 
 -- | Our LedgerView will be 'lsbd_snapshot' (see above), so the type we want is
 
-type LedgerViewD = Word64 
+newtype LedgerViewD = LVD Word64 
+  deriving (Show, Eq, Generic, Serialise, NoThunks)
 
 -- | Ticking LedgerViewD requires no less, no more than LedgerViewD:
 
-data instance Ticked LedgerViewD = TickedLedgerViewD LedgerViewD
+newtype instance Ticked LedgerViewD = TickedLedgerViewD LedgerViewD
   deriving (Show, Eq, Generic, Serialise, NoThunks)
 
 
@@ -301,7 +302,7 @@ instance UpdateLedger BlockD where {}
 
 instance LedgerSupportsProtocol BlockD where
   protocolLedgerView _lcfg (TickedLedgerStateD ldgrSt) =
-    TickedLedgerViewD (lsbd_snapshot ldgrSt)
+    TickedLedgerViewD (LVD( lsbd_snapshot ldgrSt))
 
   -- | Borrowing somewhat from Ouroboros/Consensus/Byron/Ledger/Ledger.hs
   ledgerViewForecastAt _lccf ldgrSt =
@@ -317,7 +318,7 @@ instance LedgerSupportsProtocol BlockD where
                         , outsideForecastFor   = for
                         }
                  else
-                   return $ TickedLedgerViewD $ lsbd_snapshot ldgrSt
+                   return $ TickedLedgerViewD $ LVD $ lsbd_snapshot ldgrSt
              }
     where
     at :: WithOrigin SlotNo
