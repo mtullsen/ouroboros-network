@@ -46,15 +46,18 @@ data PrtclD_CanBeLeader = PrtclD_CanBeLeader -- Evidence we /can/ be a leader
 data PrtclD_IsLeader    = PrtclD_IsLeader    -- Evidence we /are/ leader
 
 data instance ConsensusConfig PrtclD =
-  PrtclD_Config { ccpd_securityParam :: SecurityParam  -- i.e., 'k'
-                }
+  PrtclD_Config
+    { ccpd_securityParam :: SecurityParam  -- i.e., 'k'
+    , ccpd_nodeId        :: Word64         -- simplistic method to identify nodes
+                                             -- invariant: this unique for every node
+    }
   deriving (Eq, Show)
   deriving NoThunks via OnlyCheckWhnfNamed "PrtclD_Config"
                         (ConsensusConfig PrtclD)
 
 instance ConsensusProtocol PrtclD where
   
-  type ChainDepState PrtclD = ()               -- TODO: want more here?
+  type ChainDepState PrtclD = ChainDepStateD
   type IsLeader      PrtclD = PrtclD_IsLeader
   type CanBeLeader   PrtclD = PrtclD_CanBeLeader
   
@@ -66,33 +69,58 @@ instance ConsensusProtocol PrtclD where
   type LedgerView    PrtclD = LedgerViewD
   
   -- | View on a block header required for header validation
-  type ValidateView  PrtclD = ()               -- TODO: change for Prtcl D
+  type ValidateView  PrtclD = ()               -- TODO: make non-trivial.
   type ValidationErr PrtclD = Void
 
-  checkIsLeader cfg PrtclD_CanBeLeader slot _tcds =
-     stub -- TODO!
-     {-
-     if slot `Set.member` ccpd_iLeadInSlots cfg
-      then Just PrtclD_IsLeader
-      else Nothing
-     -}
+  checkIsLeader cfg PrtclD_CanBeLeader slot tcds =
+    if isLeader (ccpd_nodeId cfg) slot tcds then
+      Just PrtclD_IsLeader
+    else
+      Nothing
     
   protocolSecurityParam = ccpd_securityParam
 
-  tickChainDepState     _ _ _ _ = TickedTrivial
-                                  -- works b/c ChainDepState PrtclD = ()
+  tickChainDepState _cfg tlv _slot _cds =
+    tickChainDepState' tlv
 
-  updateChainDepState   _ _ _ _ = return ()
+  updateChainDepState   _ _ _ _ = return ChainDepStateD
   
-  reupdateChainDepState _ _ _ _ = ()
+  reupdateChainDepState _ _ _ _ = ChainDepStateD
 
 
 pd_config :: ConsensusConfig PrtclD
 pd_config = PrtclD_Config
               { ccpd_securityParam= SecurityParam{maxRollbacks= 1}
+              , ccpd_nodeId       = 0
               }
 
+              
+---- Leadership --------------------------------------------------------------
 
+-- | 'ChainDepState PrtclD' is unit for the moment.
+--   TODO: extend to make more realistic.
+data ChainDepStateD = ChainDepStateD
+     deriving (Eq,Show,Generic,NoThunks)
+
+-- | Our Ticked ChainDepStateD must contain the LedgerViewD, this allows us to
+--   base the leadership schedule on the LedgerState (at the last epoch boundary).
+data instance Ticked ChainDepStateD = TickedChainDepStateD LedgerViewD
+
+-- | A rather degenerate tickChainDepState function, but here we simply want to
+--   extract the relevant LedgerView data into our Ticked ChainDepState:
+tickChainDepState' :: Ticked LedgerViewD -> Ticked ChainDepStateD
+tickChainDepState' (TickedLedgerViewD lv) = TickedChainDepStateD lv
+    
+
+-- | A somewhat fanciful leadership schedule, each epoch chooses a different 10
+--   nodes to do a round-robin schedule:
+isLeader :: Word64 -> SlotNo -> Ticked ChainDepStateD -> Bool
+isLeader nodeId (SlotNo slot) (TickedChainDepStateD x) =
+  case x `mod` 2 of
+    0 -> slot `mod` 10      == nodeId  -- nodes [0..9]   do a round-robin
+    1 -> (slot `mod` 10)+10 == nodeId  -- nodes [10..19] do a round-robin
+
+         
 ---- Block D (for Protocol D) ------------------------------------------------
 
 -- | Define BlockD
