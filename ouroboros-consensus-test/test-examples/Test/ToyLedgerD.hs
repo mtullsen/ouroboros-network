@@ -45,8 +45,8 @@ data PrtclD_CanBeLeader = PrtclD_CanBeLeader -- Evidence we /can/ be a leader
 data PrtclD_IsLeader    = PrtclD_IsLeader    -- Evidence we /are/ leader
 
 data instance ConsensusConfig PrtclD =
-  PrtclD_Config { ccpc_iLeadInSlots  :: Set SlotNo
-                , ccpc_securityParam :: SecurityParam  -- i.e., 'k'
+  PrtclD_Config { ccpd_iLeadInSlots  :: Set SlotNo
+                , ccpd_securityParam :: SecurityParam  -- i.e., 'k'
                 }
   deriving (Eq, Show)
   deriving NoThunks via OnlyCheckWhnfNamed "PrtclD_Config"
@@ -63,18 +63,18 @@ instance ConsensusProtocol PrtclD where
   type SelectView    PrtclD = BlockNo
 
   -- | View on the ledger required by the protocol
-  type LedgerView    PrtclD = ()               -- TODO: change for Prtcl D.
+  type LedgerView    PrtclD = LedgerViewD
   
   -- | View on a block header required for header validation
   type ValidateView  PrtclD = ()               -- TODO: change for Prtcl D
   type ValidationErr PrtclD = Void
 
   checkIsLeader cfg PrtclD_CanBeLeader slot _tcds =
-      if slot `Set.member` ccpc_iLeadInSlots cfg
+      if slot `Set.member` ccpd_iLeadInSlots cfg
       then Just PrtclD_IsLeader
       else Nothing
 
-  protocolSecurityParam = ccpc_securityParam
+  protocolSecurityParam = ccpd_securityParam
 
   tickChainDepState     _ _ _ _ = TickedTrivial
                                   -- works b/c ChainDepState PrtclD = ()
@@ -84,18 +84,18 @@ instance ConsensusProtocol PrtclD where
   reupdateChainDepState _ _ _ _ = ()
 
 
-pc_config :: ConsensusConfig PrtclD
-pc_config = PrtclD_Config
-              { ccpc_iLeadInSlots = Set.empty -- NOTE: never a leader.
-              , ccpc_securityParam= SecurityParam{maxRollbacks= 1}
+pd_config :: ConsensusConfig PrtclD
+pd_config = PrtclD_Config
+              { ccpd_iLeadInSlots = Set.empty -- NOTE: never a leader.
+              , ccpd_securityParam= SecurityParam{maxRollbacks= 1}
               }
 
 
 ---- Block D (for Protocol D) ------------------------------------------------
 
 -- | Define BlockD
-data BlockD = BlockD { bc_header :: Header BlockD
-                     , bc_body   :: [GenTx BlockD]
+data BlockD = BlockD { bd_header :: Header BlockD
+                     , bd_body   :: [GenTx BlockD]
                      }
   deriving NoThunks via OnlyCheckWhnfNamed "BlockD" BlockD
 
@@ -113,17 +113,18 @@ instance BlockSupportsProtocol BlockD where
                             -- see -.Protocol.Abstract.preferCandidate
   
 
--- The transaction type for BlockD:
+-- The transaction type for BlockD (same as for BlockC)
 
 data Tx = Inc | Dec
-  deriving (Show, Eq, Generic, Serialise)
+  deriving (Show, Eq, Generic, Serialise, NoThunks)
 
 data instance GenTx BlockD = TxD Tx
-  deriving (Show, Eq, Generic, Serialise)
-  deriving NoThunks via OnlyCheckWhnfNamed "TxC" (GenTx BlockD)
+  deriving (Show, Eq, Generic, Serialise, NoThunks)
 
--- And what it means for the transaction to be Validated (trivial for now)
--- - Note that Validated must include the transaction as well as the evidence
+-- | And what it means for the transaction to be Validated (trivial for now)
+--   Note that Validated must include the transaction as well as the evidence
+
+-- TODO: extend?
 
 data instance Validated (GenTx BlockD) = ValidatedTxD (GenTx BlockD)
   deriving (Show, Eq, Generic, Serialise)
@@ -134,18 +135,36 @@ data instance Validated (GenTx BlockD) = ValidatedTxD (GenTx BlockD)
 
 data instance LedgerState BlockD =
   LedgerC
-    { lsbc_tip   :: Point BlockD
+    { lsbd_tip   :: Point BlockD
                                  -- Point for the last applied block.
                                  --  (Point is header hash and slot num)
-    , lsbc_count :: Word64       -- results of an up/down counter
+    , lsbd_count    :: Word64    -- results of an up/down counter
+    , lsbd_snapshot :: Word64    -- snapshot of lsbd_count, made at epoch
+                                 -- boundaries
     }
   deriving (Show, Eq, Generic, Serialise, NoThunks)
+
+-- | A local concept of epochs, number of slots per epoch
+slotsInEpochD = 50 :: Word64  
 
 newtype instance Ticked (LedgerState BlockD) =
   TickedLedgerStateD {
     unTickedLedgerStateD :: LedgerState BlockD
   }
   deriving (Show, Eq, Generic, Serialise, NoThunks)
+
+-- | We want to define a LedgerView and a Ticked version of it:
+
+-- | the results of LedgerView BlockD, in this case, the type of lsbd_snapshot
+-- above.
+
+type LedgerViewD = Word64 
+
+-- | Ticking LedgerViewD gives us the same type:
+
+data instance Ticked LedgerViewD = TickedLedgerViewD LedgerViewD
+  deriving (Show, Eq, Generic, Serialise, NoThunks)
+
 
 -- No LedgerCfg data:
 type instance LedgerCfg (LedgerState BlockD) = ()
@@ -158,10 +177,10 @@ type instance ApplyTxErr BlockD = LedgerErr_BlockD
 ---- The Ledger State for Block D: class instances ---------------------------
 
 instance GetTip (Ticked (LedgerState BlockD)) where
-  getTip = castPoint . lsbc_tip . unTickedLedgerStateD
+  getTip = castPoint . lsbd_tip . unTickedLedgerStateD
 
 instance GetTip (LedgerState BlockD) where
-  getTip = castPoint . lsbc_tip
+  getTip = castPoint . lsbd_tip
 
 
 instance IsLedger (LedgerState BlockD) where
@@ -187,7 +206,7 @@ instance ApplyBlock (LedgerState BlockD) BlockD where
       foldM 
         (\tls tx-> fst <$> applyTx ldgrCfg DoNotIntervene slot tx tls)
         tickedLdgrSt
-        (bc_body b)
+        (bd_body b)
       
     return $
       LedgerResult { lrEvents= []
@@ -210,10 +229,10 @@ tickLedgerStateD _slot ldgrSt = TickedLedgerStateD ldgrSt
 instance UpdateLedger BlockD where {}  
 
 instance LedgerSupportsProtocol BlockD where
-  protocolLedgerView _lcfg  _tl = TickedTrivial 
+  protocolLedgerView _lcfg (TickedLedgerStateD ldgrSt)
+    = TickedLedgerViewD (lsbd_snapshot ldgrSt)
 
-  ledgerViewForecastAt _lccf = trivialForecast
-    -- This is all that's needed, as 'LedgerView PrtclD' is '()'.
+  ledgerViewForecastAt _lccf = stub "ledgerView"
     -- TODO: For Prtcl D: want this to be more.
     
 instance LedgerSupportsMempool BlockD where
@@ -222,7 +241,7 @@ instance LedgerSupportsMempool BlockD where
 
   applyTx _lc _wti _slot tx (TickedLedgerStateD ldgrSt) =
     return ( TickedLedgerStateD 
-               ldgrSt{lsbc_count= applyTxD tx (lsbc_count ldgrSt)}
+               ldgrSt{lsbd_count= applyTxD tx (lsbd_count ldgrSt)}
            , ValidatedTxD tx -- no evidence being provided now.
            )
     
@@ -258,8 +277,8 @@ instance BasicEnvelopeValidation BlockD where {}
 ---- Data --------------------------------------------------------------------
 
 blockD :: BlockD
-blockD = BlockD { bc_header= HdrBlockD stub stub stub stub -- TODO
-                , bc_body  = [TxD Inc, TxD Inc]
+blockD = BlockD { bd_header= HdrBlockD stub stub stub stub -- TODO
+                , bd_body  = [TxD Inc, TxD Inc]
                 }
 
 
@@ -270,34 +289,34 @@ blockD = BlockD { bc_header= HdrBlockD stub stub stub stub -- TODO
 -- | the minimum header:
 data instance Header BlockD =
   HdrBlockD
-    { hbc_SlotNo  :: SlotNo
-    , hbc_BlockNo :: BlockNo
-    , hbc_Hash    :: HeaderHash BlockD
-    , hbc_prev    :: ChainHash BlockD
+    { hbd_SlotNo  :: SlotNo
+    , hbd_BlockNo :: BlockNo
+    , hbd_Hash    :: HeaderHash BlockD
+    , hbd_prev    :: ChainHash BlockD
     }
   deriving stock    (Show, Eq, Generic)
   deriving anyclass (Serialise)
   deriving NoThunks via OnlyCheckWhnfNamed "HdrBlockD" (Header BlockD)
 
 instance GetHeader BlockD where
-  getHeader          = bc_header
+  getHeader          = bd_header
   blockMatchesHeader = \_ _ -> True -- TODO: Prtcl C/D be able to fail
   headerIsEBB        = const Nothing
 
 instance GetPrevHash BlockD where
-  headerPrevHash = hbc_prev
+  headerPrevHash = hbd_prev
 
 instance HasHeader (Header BlockD) where
   getHeaderFields hdr = HeaderFields
-                          { headerFieldSlot   = hbc_SlotNo hdr
-                          , headerFieldBlockNo= hbc_BlockNo hdr
-                          , headerFieldHash   = hbc_Hash hdr
+                          { headerFieldSlot   = hbd_SlotNo hdr
+                          , headerFieldBlockNo= hbd_BlockNo hdr
+                          , headerFieldHash   = hbd_Hash hdr
                           }
 
 instance HasHeader BlockD where
   getHeaderFields = castHeaderFields       -- Q. worth some commentary?
                   . getHeaderFields
-                  . bc_header
+                  . bd_header
                     
 type instance HeaderHash BlockD = Hash
 

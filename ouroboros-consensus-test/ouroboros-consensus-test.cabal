@@ -319,7 +319,8 @@ test-suite test-examples
                      , Test.Utilities
                      , Test.ToyLedger1
                      , Test.ToyLedgerC
-
+                     , Test.ToyLedgerD
+                     
   build-depends:       base
                      , QuickCheck
                      , containers
