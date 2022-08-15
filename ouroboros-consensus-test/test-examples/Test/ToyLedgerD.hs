@@ -10,8 +10,7 @@ module Test.ToyLedgerD where
 
 -- base pkgs:
 import           Control.Monad
-import           Data.Set (Set)
-import qualified Data.Set as Set
+import           Control.Monad.Except
 import           Data.Void
 import           Data.Word (Word64)
 import           GHC.Generics (Generic)
@@ -31,7 +30,7 @@ import           Ouroboros.Consensus.Ledger.Abstract
 import           Ouroboros.Consensus.Ledger.SupportsMempool
 import           Ouroboros.Consensus.Ledger.SupportsProtocol
 import           Ouroboros.Consensus.HeaderValidation
-import           Ouroboros.Consensus.Forecast (trivialForecast)
+import           Ouroboros.Consensus.Forecast
 
 -- local modules:
 import           Test.Utilities
@@ -45,16 +44,18 @@ data PrtclD_CanBeLeader = PrtclD_CanBeLeader -- Evidence we /can/ be a leader
 data PrtclD_IsLeader    = PrtclD_IsLeader    -- Evidence we /are/ leader
 
 data instance ConsensusConfig PrtclD =
-  PrtclD_Config { ccpd_iLeadInSlots  :: Set SlotNo
-                , ccpd_securityParam :: SecurityParam  -- i.e., 'k'
-                }
+  PrtclD_Config
+    { ccpd_securityParam :: SecurityParam  -- i.e., 'k'
+    , ccpd_nodeId        :: Word64         -- simplistic method to identify nodes
+                                             -- invariant: this unique for every node
+    }
   deriving (Eq, Show)
   deriving NoThunks via OnlyCheckWhnfNamed "PrtclD_Config"
                         (ConsensusConfig PrtclD)
 
 instance ConsensusProtocol PrtclD where
   
-  type ChainDepState PrtclD = ()   -- TODO: want more here, for C? for D?
+  type ChainDepState PrtclD = ChainDepStateD
   type IsLeader      PrtclD = PrtclD_IsLeader
   type CanBeLeader   PrtclD = PrtclD_CanBeLeader
   
@@ -66,31 +67,62 @@ instance ConsensusProtocol PrtclD where
   type LedgerView    PrtclD = LedgerViewD
   
   -- | View on a block header required for header validation
-  type ValidateView  PrtclD = ()               -- TODO: change for Prtcl D
+  type ValidateView  PrtclD = ()               -- TODO: make non-trivial.
   type ValidationErr PrtclD = Void
 
-  checkIsLeader cfg PrtclD_CanBeLeader slot _tcds =
-      if slot `Set.member` ccpd_iLeadInSlots cfg
-      then Just PrtclD_IsLeader
-      else Nothing
-
+  checkIsLeader cfg PrtclD_CanBeLeader slot tcds =
+    if isLeader (ccpd_nodeId cfg) slot tcds then
+      Just PrtclD_IsLeader
+    else
+      Nothing
+    
   protocolSecurityParam = ccpd_securityParam
 
-  tickChainDepState     _ _ _ _ = TickedTrivial
-                                  -- works b/c ChainDepState PrtclD = ()
+  tickChainDepState _cfg tlv _slot _cds =
+    tickChainDepState' tlv
 
-  updateChainDepState   _ _ _ _ = return ()
+  updateChainDepState   _ _ _ _ = return ChainDepStateD
   
-  reupdateChainDepState _ _ _ _ = ()
+  reupdateChainDepState _ _ _ _ = ChainDepStateD
 
 
 pd_config :: ConsensusConfig PrtclD
 pd_config = PrtclD_Config
-              { ccpd_iLeadInSlots = Set.empty -- NOTE: never a leader.
-              , ccpd_securityParam= SecurityParam{maxRollbacks= 1}
+              { ccpd_securityParam= SecurityParam{maxRollbacks= 1}
+              , ccpd_nodeId       = 0
               }
 
+              
+---- Leadership --------------------------------------------------------------
 
+-- | 'ChainDepState PrtclD' is unit for the moment.
+--   TODO: extend to make more realistic.
+data ChainDepStateD = ChainDepStateD
+     deriving (Eq,Show,Generic,NoThunks)
+
+-- | Our Ticked ChainDepStateD must contain the LedgerViewD, this allows us to
+--   base the leadership schedule on the LedgerState (at the last epoch boundary).
+data instance Ticked ChainDepStateD =
+     TickedChainDepStateD LedgerViewD
+     deriving (Eq,Show,Generic,NoThunks)
+
+-- | A rather degenerate tickChainDepState function, but here we simply want to
+--   extract the relevant LedgerView data into our Ticked ChainDepState:
+tickChainDepState' :: Ticked LedgerViewD -> Ticked ChainDepStateD
+tickChainDepState' (TickedLedgerViewD lv) = TickedChainDepStateD lv
+    
+
+-- | A somewhat fanciful leadership schedule, each epoch chooses a particular
+--   set of 10 nodes to do a round-robin schedule. This set is based on whether
+--   our ledger state (a single counter) is odd or even.
+isLeader :: Word64 -> SlotNo -> Ticked ChainDepStateD -> Bool
+isLeader nodeId (SlotNo slot) (TickedChainDepStateD (LVD cntr)) =
+  case cntr `mod` 2 of
+    0 -> slot `mod` 10      == nodeId  -- nodes [0..9]   do a round-robin (even cntr)
+    1 -> (slot `mod` 10)+10 == nodeId  -- nodes [10..19] do a round-robin (odd cntr)
+    _ -> error "panic: the impossible ..."
+
+         
 ---- Block D (for Protocol D) ------------------------------------------------
 
 -- | Define BlockD
@@ -108,9 +140,8 @@ instance BlockSupportsProtocol BlockD where
   validateView _bcfg _hdr = ()
   selectView   _bcfg hdr  = blockNo hdr
                             -- i.e., the default method.
-                            -- i.e., we only need the block no in order
-                            -- to do chain selection
-                            -- see -.Protocol.Abstract.preferCandidate
+                            -- i.e., we only need the blockNo to do chain selection
+                            -- see ...Protocol.Abstract.preferCandidate
   
 
 -- The transaction type for BlockD (same as for BlockC)
@@ -121,31 +152,43 @@ data Tx = Inc | Dec
 data instance GenTx BlockD = TxD Tx
   deriving (Show, Eq, Generic, Serialise, NoThunks)
 
+
 -- | And what it means for the transaction to be Validated (trivial for now)
 --   Note that Validated must include the transaction as well as the evidence
-
--- TODO: extend?
 
 data instance Validated (GenTx BlockD) = ValidatedTxD (GenTx BlockD)
   deriving (Show, Eq, Generic, Serialise)
   deriving NoThunks
 
 
+---- A simplistic concept of Epochs ------------------------------------------
+
+slotsInEpoch :: Word64
+slotsInEpoch = 50
+  -- TODO: more interesting to put this into LedgerCfg?
+
+epochOf :: WithOrigin SlotNo -> EpochNo
+epochOf Origin        = EpochNo 0  -- Appears safe to put Origin into epoch 0
+epochOf (NotOrigin s) = EpochNo $ unSlotNo s `mod` slotsInEpoch
+                        
+nextEpochStartSlot :: WithOrigin SlotNo -> SlotNo
+nextEpochStartSlot wo =
+  SlotNo $ case wo of
+             Origin         -> slotsInEpoch
+             NotOrigin slot -> (unSlotNo slot `div` slotsInEpoch) + slotsInEpoch
+
+
 ---- The Ledger State for Block D: Type family instances ---------------------
 
 data instance LedgerState BlockD =
   LedgerC
-    { lsbd_tip   :: Point BlockD
-                                 -- Point for the last applied block.
-                                 --  (Point is header hash and slot num)
-    , lsbd_count    :: Word64    -- results of an up/down counter
-    , lsbd_snapshot :: Word64    -- snapshot of lsbd_count, made at epoch
-                                 -- boundaries
+    { lsbd_tip   :: Point BlockD  -- Point for the last applied block.
+                                  --   (Point is header hash and slot num)
+    , lsbd_count    :: Word64     -- results of the up/down Txs
+    , lsbd_snapshot :: Word64     -- snapshot of lsbd_count, made at epoch
+                                  --   boundaries
     }
   deriving (Show, Eq, Generic, Serialise, NoThunks)
-
--- | A local concept of epochs, number of slots per epoch
-slotsInEpochD = 50 :: Word64  
 
 newtype instance Ticked (LedgerState BlockD) =
   TickedLedgerStateD {
@@ -153,16 +196,16 @@ newtype instance Ticked (LedgerState BlockD) =
   }
   deriving (Show, Eq, Generic, Serialise, NoThunks)
 
--- | We want to define a LedgerView and a Ticked version of it:
+-- | We want to define a 'LedgerView p' and a 'Ticked(LedgerView p)'.
 
--- | the results of LedgerView BlockD, in this case, the type of lsbd_snapshot
--- above.
+-- | Our LedgerView will be 'lsbd_snapshot' (see above), so the type we want is
 
-type LedgerViewD = Word64 
+newtype LedgerViewD = LVD Word64 
+  deriving (Show, Eq, Generic, Serialise, NoThunks)
 
--- | Ticking LedgerViewD gives us the same type:
+-- | Ticking LedgerViewD requires no less, no more than LedgerViewD:
 
-data instance Ticked LedgerViewD = TickedLedgerViewD LedgerViewD
+newtype instance Ticked LedgerViewD = TickedLedgerViewD LedgerViewD
   deriving (Show, Eq, Generic, Serialise, NoThunks)
 
 
@@ -188,7 +231,8 @@ instance IsLedger (LedgerState BlockD) where
   type instance AuxLedgerEvent (LedgerState BlockD) = ()
 
   -- | This method is for updating the ledger state when it needs to change
-  -- based on time (slot) changing.  In this case, nothing needs to be done.
+  -- based on time (slot) changing.  For Protocol/Ledger D, we want to take a snapshot
+  -- at epoch boundaries, see the definition of 'tickLedgerStateD' below.
   -- 
   -- This method shall not update the tip.
   -- Note the doc for the class:
@@ -198,6 +242,7 @@ instance IsLedger (LedgerState BlockD) where
 
   applyChainTickLedgerResult _cfg slot ldgrSt =
     LedgerResult {lrEvents= [], lrResult= tickLedgerStateD slot ldgrSt}
+
 
 instance ApplyBlock (LedgerState BlockD) BlockD where
   applyBlockLedgerResult ldgrCfg b tickedLdgrSt =
@@ -210,30 +255,78 @@ instance ApplyBlock (LedgerState BlockD) BlockD where
       
     return $
       LedgerResult { lrEvents= []
-                   , lrResult= ldgrSt
-                   } 
+                   , lrResult= ldgrSt{lsbd_tip= blockPoint b}
+                   }
     where
     slot = blockSlot (getHeader b)
 
   reapplyBlockLedgerResult _lc b _tl =
-    LedgerResult {lrEvents= [], lrResult= stub b}
-    -- TODO: fill in; though this would be boilerplate.
+    LedgerResult { lrEvents= []
+                 , lrResult= stub b
+                 }
+    -- TODO(low-priority): fill in; though this would be primarily boilerplate.
+    -- 
+    -- ASIDE:
+    --   We're not planning to implement this "realistically", i.e., to make
+    --   this particularly faster than 'applyBlockLedgerResult'
 
--- | tickLedgerStateD - helper function to tick the LedgerState
---     currently this is effectively a NOP.  [TODO for Protocol D!]
+
+-- | tickLedgerStateD - helper function to tick the LedgerState. Here, in
+--   Protocol/Ledger D, we 'snapshot' the Ledger state (i.e., 'lsbd_count') at
+--   epoch boundaries (to use by the leader selection).
+
 tickLedgerStateD ::
   SlotNo -> LedgerState BlockD -> Ticked (LedgerState BlockD)
-tickLedgerStateD _slot ldgrSt = TickedLedgerStateD ldgrSt
-  
+tickLedgerStateD newSlot ldgrSt =
+  TickedLedgerStateD $
+    if isNewEpoch then
+      ldgrSt{lsbd_snapshot= lsbd_count ldgrSt}  -- snapshot the count
+    else
+      ldgrSt 
+      
+  where
+  isNewEpoch =
+    case compare
+           (epochOf (pointSlot $ lsbd_tip ldgrSt)) -- epoch of last block added
+           (epochOf (NotOrigin newSlot))           -- epoch of newSlot
+    of
+      LT -> True
+      EQ -> False
+      GT -> error "cannot tick slots backwards"
+    
+    
 -- | no methods here, 'UpdateLedger' is a class to roll-up classes:
 instance UpdateLedger BlockD where {}  
 
-instance LedgerSupportsProtocol BlockD where
-  protocolLedgerView _lcfg (TickedLedgerStateD ldgrSt)
-    = TickedLedgerViewD (lsbd_snapshot ldgrSt)
 
-  ledgerViewForecastAt _lccf = stub "ledgerView"
-    -- TODO: For Prtcl D: want this to be more.
+instance LedgerSupportsProtocol BlockD where
+  protocolLedgerView _lcfg (TickedLedgerStateD ldgrSt) =
+    TickedLedgerViewD (LVD( lsbd_snapshot ldgrSt))
+
+  -- | Borrowing somewhat from Ouroboros/Consensus/Byron/Ledger/Ledger.hs
+  ledgerViewForecastAt _lccf ldgrSt =
+    Forecast { forecastAt= at
+             , forecastFor= \for->
+                 if NotOrigin for < at then
+                    error "panic: precondition violated"
+                 else if for >= maxFor then
+                   throwError $                      
+                     OutsideForecastRange
+                        { outsideForecastAt    = at
+                        , outsideForecastMaxFor= maxFor
+                        , outsideForecastFor   = for
+                        }
+                 else
+                   return $ TickedLedgerViewD $ LVD $ lsbd_snapshot ldgrSt
+             }
+    where
+    at :: WithOrigin SlotNo
+    at = pointSlot $ lsbd_tip $ ldgrSt  -- the current slot that the ledger reflects
+
+    maxFor :: SlotNo
+    maxFor = nextEpochStartSlot at  -- next epoch is time of next snapshot
+                                    -- when our LedgerView becomes unknown.
+
     
 instance LedgerSupportsMempool BlockD where
   
@@ -277,7 +370,7 @@ instance BasicEnvelopeValidation BlockD where {}
 ---- Data --------------------------------------------------------------------
 
 blockD :: BlockD
-blockD = BlockD { bd_header= HdrBlockD stub stub stub stub -- TODO
+blockD = BlockD { bd_header= HdrBlockD stub stub stub stub -- TODO(low-priority)
                 , bd_body  = [TxD Inc, TxD Inc]
                 }
 
