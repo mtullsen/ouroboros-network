@@ -19,6 +19,7 @@ This example uses several extensions:
 > {-# LANGUAGE DeriveAnyClass             #-}
 > {-# LANGUAGE MultiParamTypeClasses      #-}
 > {-# LANGUAGE StandaloneDeriving         #-}
+
 > module Test.Tutorial() where
 
 First, some imports we'll need:
@@ -26,7 +27,7 @@ First, some imports we'll need:
 > import Data.Void(Void)
 > import Data.Set(Set)
 > import qualified Data.Set as Set
-> import Data.Word(Word64)
+> import Data.Word(Word64, Word8)
 > import GHC.Generics (Generic)
 > import Codec.Serialise (Serialise)
 > import NoThunks.Class (NoThunks, OnlyCheckWhnfNamed (..))
@@ -107,19 +108,21 @@ Let's examine each of these in turn:
 Chain Selection: `SelectView`
 -----------------------------
 
+**TODO: why does the protocol need to select chains - either add material here ore in the overview**
+
 One of the major decisions when implementing a consensus protocol is encoding a
 policy for chain selection.  The `SelectView SP` type represents the information
 necessary from a block header to help make this decision.
 
 The other half of this - which explains how a `SelectView` is derived from
 a particular block - is expressed by the block's implementation of the
- `BlockSupportsProtocol` typeclass.  (See pill N.) **:FIXME**
+ `BlockSupportsProtocol` typeclass.
 
 The `preferCandidate` function in `Ouroboros.Consensus.Protocol.Abstract`
 demonstrates how this is used.
 
 Note that instantiations of `ConsensusProtocol` for some protocol `p`
-consequently require `Ord (SelectView p)`.
+consequently requires `Ord (SelectView p)`.
 
 For `SP` we will use only `BlockNo` - to implement the simplest
 rule of preferring longer chains to shorter chains.
@@ -198,17 +201,27 @@ and the header check is unneeded.
 Leader Selection: `IsLeader`, `CanBeLeader`, `checkIsLeader`
 ------------------------------------------------------------
 
+
+
 **TODO: more about leadership conceptually somewhere?**
+
 **TODO: is leadership used anywhere else?**
 
 The type family `CanBeLeader` represents the ability for a particular node
 in the protocol to be a leader for a slot.  Put another way, a value of `CanBeLeader p` for a particular `p`
-witnesses the ability to be a leader in a particular context.
+witnesses the potential for a consensus participant to be a leader for a particular slot.
 
 In the same way, a value `IsLeader` witnesses the fact that a particular node is a leader for a slot.
 
-In `SP` both of these are simple singleton types but in more complex protocols
-they may contain cryptographic proof of the property witnessed by each.
+This notion of leadership is used to validate whether blocks are correct with
+respect to having been provably created by the leader of the slot the block
+appears in.  However, the details of what constitutes proof is specific
+to a particular blockchain, which is why it is dealt with abstractly
+in `ConsensusProtocol`.  Generally values of `CanBeLeader p` and `IsLeader p`
+are some sort of cryptographic evidence substantiating a claim to leadership.
+
+However, since we are less concerned about security in `SP`, we will use two simple singleton types -
+nothing cryptographic is happening at all.
 
 The `checkIsLeader` function uses these types in its determination of whether or not a node is a leader
 for a slot - returning `Nothing` if the node is not a slot leader or `Just (IsLeader p)`
@@ -236,11 +249,7 @@ The `maxRollbacks` field on the `SecurityParam` record (often referred to as `k`
 describes how many blocks can be rolled back - any number of blocks greater than
 this should be considered permanently part of the chain with respect to the protocol.
 
-**TODO: what does this affect?  chain selection?** **MT: absolutely, :-)**
-
-In the case of `SP` we don't allow rollback at all.
-
-
+In the case of `SP` we allow 1 rollback.
 
 Further reading about Consensus
 -------------------------------
@@ -268,7 +277,7 @@ block or ledger implementation.
 To enhance our example we'll implement a simple block
 and ledger that can be used with `SP` that logically keeps track of a
 single number.  Each block contains a list of transactions that either
-increment or decrement the number and at any point in time, and the
+increment or decrement the number.  At any point in time, the
 ledger's state can be thought of the net effect of all these
 transactions - in other words, the number of increment transactions
 minus the number of decrement transactions.
@@ -288,8 +297,6 @@ Next, we'll define the block itself:
 >                      , bc_body   :: [Tx]
 >                      }
 
-**TODO: Should we use GenTx instead?**
-
 Which is to say, a block is just a header (`Header BlockC`) followed by a
 list of transactions (`[Tx]`) - we'll need to instantiate the `Header` family for `BlockC`.
 
@@ -299,7 +306,8 @@ Block Headers
 -------------
 
 The block header describes the _structure_ of the block chain - for example
-the hash of this block and that of the block before it. (**TODO: what about genesis?**)
+the hash of this block and that of the block before it.  As a side note,
+in the case of the genesis block, this "previous" hash will also be its own hash.
 This corresponds to the `Header` data family (from `Ouroboros.Consensus.Block.Abstract`)
 which we'll instantiate as:
 
@@ -313,10 +321,27 @@ which we'll instantiate as:
 >   deriving stock    (Show, Eq, Generic)
 >   deriving anyclass (Serialise)
 
+The `HeaderHash` type family describes the type used to represent
+hashes of headers - while the `ChainHash` type is either
+the `HeaderHash` of the prior block or `Genesis` if this is the
+genesis block.
+
+Accordingly, we'll instantiate `HeaderHash BlockC` as a list of bytes:
+
+> type instance HeaderHash BlockC = [Word8]
+
+We'll also instantiate the empty `StandardHash` class which
+does nothing that place additional constraints (already fulfilled by `[Word8]`)
+on `HeaderHash`.
+
+> instance StandardHash BlockC
+
 Because `Header` is a data family, functions using instantiations of this
 family will know nothing about the structure of the data - instead there
 are other typeclasses needed to build an interface to derive things that
 are needed from this value.  We'll implement those typeclasses next.
+
+
 
 Interface to the Block Header
 -----------------------------
@@ -373,15 +398,6 @@ As well as `BlockC` itself - which calls the `getHeaderFields` defined for `Head
 > instance ValidateEnvelope        BlockC where {}
 > instance BasicEnvelopeValidation BlockC where {}
 
-Hashing Blocks
---------------
-
-**TODO: what are these? **
-
-> type instance HeaderHash BlockC = Hash
-
-> instance StandardHash BlockC
-
 Associating the Block and the Protocol - `BlockSupportsProtocol` and `BlockProtocol`
 ------------------------------------------------------------------------------------
 
@@ -393,7 +409,7 @@ how the two are associated.
 More generally, a block has one and only one type of protocol - but the converse
 is not true - a protocol may have many types of block.  As such, the association
 between the two specifies the protocol for a particular type of block.
-The type family establishing this relationship is the `BlockProtocol` class.
+The type family establishing this relationship is the `BlockProtocol` family.
 
 Here, we define the protocol type for `BlockC` as `SP`:
 
@@ -433,7 +449,7 @@ any particular state.
 **TODO: more explanation here**
 
 Below we'll define a group of typeclasses that together implement a simple
-ledger that uses `BlockC` and that is suitable for our consensus protocol `SP`
+ledger that uses `BlockC` and that is suitable for our consensus protocol `SP`.
 
 
 `LedgerCfg` - Ledger Static Configuration
@@ -467,14 +483,14 @@ seen.
 >    deriving (Show, Eq, Generic, Serialise)
 
 The `Point` type (defined in `Ouroboros.Network.Block`) describes a particular
-place in the blockchain - a combination of a slot and a block hash.
+place in the blockchain - a pair of a slot and a block hash.
 
 `Ticked` - Modeling the Passage of Time
 ---------------------------------------
 
 The slot abstraction defines a logical clock - and instances of the `Ticked` family
-describe values that correspond to the evolution of things with respect a single step
-of this logical clock.  As such, we will also need to define an instance of `Ticked`
+describe values that evolve with respect to this logical clock.
+As such, we will also need to define an instance of `Ticked`
 for our ledger state.  In the particular case of our example, this is essentially
 an `Identity` functor:
 
@@ -490,18 +506,20 @@ an `Identity` functor:
 
 The `IsLedger` class describes some of the basic functionality and associated
 types for a ledger.  Though we are here using
+
 > instance IsLedger (LedgerState BlockC) where
->   type instance LedgerErr      (LedgerState BlockC) = ()
->   type instance AuxLedgerEvent (LedgerState BlockC) = ()
+>   type instance LedgerErr      (LedgerState BlockC) = Void
+>   type instance AuxLedgerEvent (LedgerState BlockC) = Void
 >   applyChainTickLedgerResult _cfg _slot ldgrSt =
 >     LedgerResult {lrEvents = [], lrResult = TickedLedgerStateC ldgrSt}
 
 The `LedgerErr` type is the type of errors associated with this ledger that can be
 thrown while applying blocks or transactions.  In the case of `LedgerState BlockC`
-there are no errors **TODO: wrong slot error?**, so we'll use unit here.
+we are not expecting any errors, so we'll use `Void` here.
 
 The `AuxLedgerEvent` type describes events that can occur as output
-while applying blocks.  We will also not be using this for our example.
+while applying blocks.  We will also not be using this for our example -
+as such we will also use `Void` here.
 
 The `applyChainTickLedgerResult` function 'ticks' the `LedgerState`,
 resulting in an updated `LedgerState` that has witnessed a change
@@ -520,55 +538,62 @@ A block `b` is said to have been `applied` to a `LedgerState` if that
 `LedgerState` is the result of having witnessed `b` at some point.
 We can express this as a function:
 
-> applyBlockTo :: BlockC -> LedgerState BlockC -> LedgerState BlockC
-> applyBlockTo block ledgerState =
+> applyBlockTo :: BlockC -> Ticked (LedgerState BlockC) -> LedgerState BlockC
+> applyBlockTo block tickedLedgerState =
 >   ledgerState { lsbc_tip = blockPoint block
 >               , lsbc_count = lsbc_count'
 >               }
 >   where
+>     ledgerState = unTickedLedgerStateC tickedLedgerState
 >     lsbc_count' = foldl txDelta (lsbc_count ledgerState) (bc_body block)
 >     txDelta i tx =
 >       case tx of
 >         Inc -> i + 1
 >         Dec -> i - 1
 
+We use a `Ticked (LedgerState BlockC)` to enforce the invariant that we should
+not apply two blocks in a row - at least one tick (aka slot) must have elapsed
+between block applications. **TODO: motivate this conceptually earlier?**
+
+
 The interface used by the rest of the ledger infrastructure to access this
 is the `ApplyBlock` typeclass:
 
 > instance ApplyBlock (LedgerState BlockC) BlockC where
->   -- TODO: do we need to throw an error if we attempt to apply a block with a
->   -- lower slot than our LedgerState's tip?
->   applyBlockLedgerResult _ldgrCfg b tickedLdgrSt =
->         pure $ LedgerResult { lrEvents = []
->                             , lrResult = ledgerState'
->                             }
->     where
->       ledgerState' = b `applyBlockTo` unTickedLedgerStateC tickedLdgrSt
+>   applyBlockLedgerResult ldgrCfg block tickedLdgrSt =
+>     pure $ LedgerResult { lrEvents = []
+>                         , lrResult = block `applyBlockTo` tickedLdgrSt
+>                         }
 >
->   reapplyBlockLedgerResult ldgrCfg b tickedLdgrSt =
->        LedgerResult { lrEvents = []
->                     , lrResult = ledgerState'
->                     }
->     where
->       ledgerState' = b `applyBlockTo` unTickedLedgerStateC tickedLdgrSt
+>   reapplyBlockLedgerResult ldgrCfg block tickedLdgrSt =
+>     LedgerResult { lrEvents = []
+>                  , lrResult = block `applyBlockTo` tickedLdgrSt
+>                  }
+>
 >
 
 `applyBlockLedgerResult` tries to apply a block to the ledger and fails
 with a `LedgerErr` corresponding to the particular `LedgerState blk`
 if for whatever reason the block could not be applied.
 
+We previously defined `LedgerErr` as `()`
+This might seem troubling - for example, `BlockC` contains a slot number -
+what if we try to apply a block labelled with a slot that is already in
+the past?  However, this is something that should be checked by
+callers of this code.
+
 `reapplyBlockLedgerResult` similar but is meant to be called by code path
 that has previously established that the application of a block would not fail,
 so it admits no possibility for failure.
 
-Both of these return a `LedgerResult` record which containing both the updated
+Both of these return a `LedgerResult` record containing both the updated
 state as well as a list of `AuxLedgerEvent (LedgerState BlockC)` -
 the `AuxLedgerEvent` type family is intended to allow ledgers to emit
 extra "events" as part of applying blocks, but for our simple example
 we do not need to use this feature.
 
 Once we've defined `ApplyBlock` we can also instantiate the empty
-`UpdateLedger` class which basically captures the `ApplyBlock` relationship
+`UpdateLedger` class which captures the `ApplyBlock` relationship
 between a block type `block` and its ledger `LedgerState block` and indexes
 it by `block`.  We'll need this later for `LedgerSupportsProtocol`
 
@@ -600,8 +625,9 @@ can use the block to index both the ledger and the protocol.
 
 The `protocolLedgerView` function describes how to project the consensus-specific
 `LedgerView` out of `LedgerState` and `LedgerCfg` together - however `SP` does
-not use any information from the ledger to make any decisions and thus
-`LedgerView SP` is simply `()`.
+not use any information from the ledger to make any decisions and since
+`LedgerView SP` is simply `()` - we use `TickedTrivial` here for
+the implementation of protocolLedgerView which constructs a `Ticked ()` value.
 
 `ledgerViewForecastAt` returns a `Forecast` (defined in `Ouroboros.Consensus.Forecast``)
 of a `LedgerView` - where a `Forecast` is a starting point `forecastAt` together with a
@@ -612,21 +638,24 @@ This `Forecast` is closely related to and is required to be
 consistent with `tickChainDepState` in `ConsensusProtocol` - the documentation
 for `LedgerSupportsProtocol` explains the relationship in more detail.
 
-`LedgerSupportsMempool`: TODO - do we need this section?
---------------------------------------------------------
-
-**TODO: do we need to discuss LedgerSupportsMempool?**
-
 Appendix: NoThunks Instances
 ============================
 
-**TODO: what is NoThunks and why is it everywhere?**
+`NoThunks` is a class that comes from the `nothunks` package
+(https://hackage.haskell.org/package/nothunks) and helps
+diagnose various kinds of memory leaks having to do with thunks.
+Many of the above classes require that `NoThunks` be instantiated
+as a prerequisite.
 
 To focus on the salient ideas of this document, we've put all the derivations
 of `NoThunks` here instead:
 
-> deriving via OnlyCheckWhnfNamed "SP_Config" (ConsensusConfig SP) instance NoThunks (ConsensusConfig SP)
-> deriving via OnlyCheckWhnfNamed "BlockC" BlockC instance NoThunks BlockC
-> deriving via OnlyCheckWhnfNamed "HdrBlockC" (Header BlockC) instance NoThunks (Header BlockC)
-> deriving via OnlyCheckWhnfNamed "LedgerC" (LedgerState BlockC) instance NoThunks (LedgerState BlockC)
+> deriving via OnlyCheckWhnfNamed "SP_Config" (ConsensusConfig SP)
+>   instance NoThunks (ConsensusConfig SP)
+> deriving via OnlyCheckWhnfNamed "BlockC" BlockC
+>   instance NoThunks BlockC
+> deriving via OnlyCheckWhnfNamed "HdrBlockC" (Header BlockC)
+>   instance NoThunks (Header BlockC)
+> deriving via OnlyCheckWhnfNamed "LedgerC" (LedgerState BlockC)
+>   instance NoThunks (LedgerState BlockC)
 > deriving instance NoThunks (Ticked (LedgerState BlockC))
