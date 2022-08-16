@@ -40,8 +40,8 @@ import           Test.Utilities
 
 data PrtclD         
 
-data PrtclD_CanBeLeader = PrtclD_CanBeLeader -- Evidence we /can/ be a leader
-data PrtclD_IsLeader    = PrtclD_IsLeader    -- Evidence we /are/ leader
+data PrtclD_CanBeLeader = PrtclD_CanBeLeader -- Evidence we can lead slots
+data PrtclD_IsLeader    = PrtclD_IsLeader    -- Evidence we /are/ leader of spec. 
 
 data instance ConsensusConfig PrtclD =
   PrtclD_Config
@@ -62,7 +62,11 @@ instance ConsensusProtocol PrtclD where
   -- | View on a block header required for chain selection.
   --   Here, BlockNo is sufficient (also the default):
   type SelectView    PrtclD = BlockNo
-
+       -- if two chains w/ same same blockno - which??  how you handle ties: won
+       -- by first block I see, I wouldn't switch to b
+       -- one could sort by blockno & node-ids
+       -- what is a sound way.
+                            
   -- | View on the ledger required by the protocol
   type LedgerView    PrtclD = LedgerViewD
   
@@ -82,9 +86,22 @@ instance ConsensusProtocol PrtclD where
     tickChainDepState' tlv
 
   updateChainDepState   _ _ _ _ = return ChainDepStateD
-  
+    -- 'apply header' : should be able to fail.
+    -- need to check it!
+    -- - now LedgerView will be non-trivial
+    -- validateView will have nodeId : put in header
+    -- - 
+    -- nodid is CanBeLeader
+    -- isLeadership claim should be in header!
+    
   reupdateChainDepState _ _ _ _ = ChainDepStateD
 
+-- any node with same genesis block.
+--  - parameter that affects leader schedule.
+--  - ?
+-- NF
+--  - parts of the config must be derived from the genesis block.
+--  - ?
 
 pd_config :: ConsensusConfig PrtclD
 pd_config = PrtclD_Config
@@ -166,9 +183,18 @@ data instance Validated (GenTx BlockD) = ValidatedTxD (GenTx BlockD)
 slotsInEpoch :: Word64
 slotsInEpoch = 50
   -- TODO: more interesting to put this into LedgerCfg?
+  -- - yes, but Genesis block: has initial values for _, then on-chain changes
+  -- - just block specific (not in Ledger).
+  -- consensus config for a block must have initial values.
+  --  - 'k' = K, not expected
+  --  - k into consensusConfig (or ledgerConfig!)
+  --  - if changed by voting/_ then in the Ledger
+  --  - d parameter for Shelley
 
+-- epochOf :: WithOrigin SlotNo -> WithOrigin EpochNo  -- FIXME: use this!
 epochOf :: WithOrigin SlotNo -> EpochNo
 epochOf Origin        = EpochNo 0  -- Appears safe to put Origin into epoch 0
+                                   --  argument at call sites!
 epochOf (NotOrigin s) = EpochNo $ unSlotNo s `mod` slotsInEpoch
                         
 nextEpochStartSlot :: WithOrigin SlotNo -> SlotNo
@@ -187,6 +213,7 @@ data instance LedgerState BlockD =
     , lsbd_count    :: Word64     -- results of the up/down Txs
     , lsbd_snapshot :: Word64     -- snapshot of lsbd_count, made at epoch
                                   --   boundaries
+                                  -- can we move into ChainDepState!
     }
   deriving (Show, Eq, Generic, Serialise, NoThunks)
 
@@ -319,6 +346,16 @@ instance LedgerSupportsProtocol BlockD where
                  else
                    return $ TickedLedgerViewD $ LVD $ lsbd_snapshot ldgrSt
              }
+    -- AT LAST SLOT, cannot forecast.
+    --  - will we get stuck?
+    --  - sound, but practical??
+    -- Options?
+    --  1. just call it out: kept things simple, every once in a while there is    --    no forecast.
+    --  2. resolve: have 2 snapshots so we always have 1 epoch of lead time!
+    --    - then maxfor significantly >> 'at' (oldest one has leader sched)
+    --  3. 70% through we do the snapshot then
+    --    - practically we want some "forecast".
+    --     
     where
     at :: WithOrigin SlotNo
     at = pointSlot $ lsbd_tip $ ldgrSt  -- the current slot that the ledger reflects
