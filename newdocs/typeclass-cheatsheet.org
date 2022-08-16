@@ -1,4 +1,4 @@
-* The CheatSheet [view fixed-font, at least 135 chars wide]
+* The CheatSheet [view fixed-font, at least 140 chars wide]
 
 TYPE-FAMILIES (standalone and associated types, using implicit "kinds" P,B,L):  
 
@@ -23,8 +23,8 @@ TYPE-FAMILIES (standalone and associated types, using implicit "kinds" P,B,L):
     p ──(ChainDepState :: P→*)──> cds     -- protocol specific state (part that depends on the chain), would rollback when chain does
     p ──(IsLeader      :: P→*)──> isldr   -- evidence that a node /is/ the leader
     p ──(CanBeLeader   :: P→*)──> cbldr   -- evidence that we /can/ be leader
-    p ──(SelectView    :: P→*)──> selvw   -- projection of header used for chain selection (using 'Ord selvw'); often 'BlockNo'
-    p ──(ValidateView  :: P→*)──> valvw   -- projection of header used for header validation (not full block validation)  [[FN1]]
+    p ──(SelectView    :: P→*)──> hdrVwCS -- projection of header used for chain selection (using 'Ord hdrVwCS'); often 'BlockNo'
+    p ──(ValidateView  :: P→*)──> hdrVwHV -- projection of header used for header validation (not full block validation)  [[FN1]]
     p ──(LedgerView    :: P→*)──> ledvw   -- projection of the ledger state ('l') that is required by the protocol
     p ──(ValidationErr :: P→*)──> valerr  -- the error result when failing to add new header to 'cds'
 
@@ -50,11 +50,11 @@ TYPE-CLASSES:
 
  class Ord (SelectView p) => ConsensusProtocol p where
    type family {ChainDepState, IsLeader, CanBeLeader, SelectView, LedgerView, ValidationErr, ValidateView} :: P → *
-   checkIsLeader         :: cc → cbldr → SlotNo → Ticked cds → Maybe isldr        -- 'Just evidence' when we can lead this slot
-   tickChainDepState     :: cc → Ticked ledvw → SlotNo → cds → Ticked cds         -- update the 'cds' based on passage of time (SlotNo)
-   updateChainDepState   :: cc → valvw → SlotNo → Ticked cds → Except valerr cds  -- apply header to 'cds' (may error)
-   reupdateChainDepState :: cc → valvw → SlotNo → Ticked cds → cds                -- re-apply header to 'cds' (never errors)
-   protocolSecurityParam :: cc → SecurityParam                                    -- get security parameter 'k'
+   checkIsLeader         :: cc → cbldr → SlotNo → Ticked cds → Maybe isldr          -- 'Just evidence' when we can lead this slot
+   tickChainDepState     :: cc → Ticked ledvw → SlotNo → cds → Ticked cds           -- update the 'cds' based on passage of time (SlotNo)
+   updateChainDepState   :: cc → hdrVwHV → SlotNo → Ticked cds → Except valerr cds  -- apply header to 'cds' (may error; leader check + etc.)
+   reupdateChainDepState :: cc → hdrVwHV → SlotNo → Ticked cds → cds                -- re-apply header to 'cds' (never errors)
+   protocolSecurityParam :: cc → SecurityParam                                      -- get security parameter 'k'
 
                               class (StandardHash b, Typeable b) => HasHeader b where -- abstract over block headers
                                 getHeaderFields :: b → HeaderFields b    -- i.e., return three fields: slot, blockno, hash
@@ -78,7 +78,7 @@ TYPE-CLASSES:
     class (GetTip l, GetTip (Ticked l)) => IsLedger l where
       type family LedgerErr l      :: Type                   
       type family AuxLedgerEvent l :: Type
-      applyChainTickLedgerResult   :: lc → SlotNo → l → LedgerResult l (Ticked l)   -- apply "slot based" state transformations (tip unchanged)
+      applyChainTickLedgerResult   :: lc → SlotNo → l → LedgerResult l (Ticked l)  -- apply slot based state transformations (tip unchanged)
           
     class (IsLedger l, HeaderHash l ~ HeaderHash b, HasHeader b, HasHeader (Header b)) => ApplyBlock l b where
       applyBlockLedgerResult   :: lc → b → Ticked l → Except (LedgerErr l) (LedgerResult l l)  
