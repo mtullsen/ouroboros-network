@@ -1,4 +1,4 @@
-* The CheatSheet [view fixed-font, at least 134 chars wide]
+* The CheatSheet [view fixed-font, at least 135 chars wide]
 
 TYPE-FAMILIES (standalone and associated types, using implicit "kinds" P,B,L):  
 
