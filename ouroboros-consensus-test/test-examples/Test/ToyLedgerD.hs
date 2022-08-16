@@ -74,9 +74,10 @@ instance ConsensusProtocol PrtclD where
                                       -- currently not doing other checks
   type ValidationErr PrtclD = String  -- 
 
+  -- | Am I the leader this slot?
   checkIsLeader cfg PrtclD_CanBeLeader slot tcds =
-    if isLeader (ccpd_nodeId cfg) slot tcds then
-      Just PrtclD_IsLeader
+    if isLeader (ccpd_nodeId cfg) slot tcds then 
+      Just PrtclD_IsLeader  -- TODO: should this be my NodeId?
     else
       Nothing
     
@@ -85,22 +86,14 @@ instance ConsensusProtocol PrtclD where
   tickChainDepState _cfg tlv _slot _cds =
     tickChainDepState' tlv
 
+  -- | apply the header (hdrView), do a header check.
+  --   - here we check the block's claim to lead the slot.
   updateChainDepState _cfg hdrVw slot tcds =
     if isLeader hdrVw slot tcds then
       return ChainDepStateD
     else
       throwError $ "leader check failed: " ++ show (hdrVw,slot)
       
-    -- NF: This should be checking the header's claim to lead the slot.
-
-    -- 'apply header' : should be able to fail.
-    -- need to check it!
-    -- - now LedgerView will be non-trivial
-    -- validateView will have nodeId : put in header
-    -- - 
-    -- nodid is CanBeLeader
-    -- isLeadership claim should be in header!
-    
   reupdateChainDepState _ _ _ _ = ChainDepStateD
 
 -- any node with same genesis block.
@@ -212,7 +205,7 @@ slotsInEpoch = 50
 
 -- | note that we preserve the 'WithOrigin in the result',
 -- we don't want to associate an arbitrary EpochNo with 'Origin'.
--- TODO: bring in NF comments.
+-- TODO: bring in more NF comments.
 
 epochOf :: WithOrigin SlotNo -> WithOrigin EpochNo
 epochOf Origin        = Origin
@@ -305,19 +298,19 @@ instance ApplyBlock (LedgerState BlockD) BlockD where
       LedgerResult { lrEvents= []
                    , lrResult= ldgrSt{lsbd_tip= blockPoint b}
                    }
-      -- FIXME: BTW, errors?
+      -- FIXME: BTW, want to demonstrate possibility for error?
     where
     slot = blockSlot (getHeader b)
 
-  reapplyBlockLedgerResult _lc b _tl =
-    LedgerResult { lrEvents= []
-                 , lrResult= stub b
-                 }
-    -- TODO(low-priority): fill in; though this would be primarily boilerplate.
-    -- 
+  reapplyBlockLedgerResult ldgrCfg b tickedLdgrSt =
+    case runExcept $ applyBlockLedgerResult ldgrCfg b tickedLdgrSt of
+      Left s  -> error $ "panic: reapplyBlockLedgerResult: " ++ s
+      Right x -> x
+      
     -- ASIDE:
-    --   We're not planning to implement this "realistically", i.e., to make
-    --   this particularly faster than 'applyBlockLedgerResult'
+    --   We're not taking advantage of the opportunity of being more efficient
+    --   than 'applyBlockLedgerResult' by skipping checks.  Not needed for this
+    --   Protocol.
 
 
 -- | tickLedgerStateD - helper function to tick the LedgerState. Here, in
