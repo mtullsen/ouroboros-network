@@ -11,7 +11,6 @@ module Test.ToyLedgerD where
 -- base pkgs:
 import           Control.Monad
 import           Control.Monad.Except
-import           Data.Void
 import           Data.Word (Word64)
 import           GHC.Generics (Generic)
 
@@ -40,8 +39,8 @@ import           Test.Utilities
 
 data PrtclD         
 
-data PrtclD_CanBeLeader = PrtclD_CanBeLeader -- Evidence we can lead slots
-data PrtclD_IsLeader    = PrtclD_IsLeader    -- Evidence we /are/ leader of spec. 
+data PrtclD_CanBeLeader = PrtclD_CanBeLeader -- Evidence we /can/ lead slots (in general)
+data PrtclD_IsLeader    = PrtclD_IsLeader    -- Evidence we /do/ lead a particular slot.
 
 data instance ConsensusConfig PrtclD =
   PrtclD_Config
@@ -71,8 +70,9 @@ instance ConsensusProtocol PrtclD where
   type LedgerView    PrtclD = LedgerViewD
   
   -- | View on a block header required for header validation
-  type ValidateView  PrtclD = ()               -- TODO: make non-trivial.
-  type ValidationErr PrtclD = Void
+  type ValidateView  PrtclD = NodeId  -- need this for the leader check
+                                      -- currently not doing other checks
+  type ValidationErr PrtclD = String  -- 
 
   checkIsLeader cfg PrtclD_CanBeLeader slot tcds =
     if isLeader (ccpd_nodeId cfg) slot tcds then
@@ -85,7 +85,14 @@ instance ConsensusProtocol PrtclD where
   tickChainDepState _cfg tlv _slot _cds =
     tickChainDepState' tlv
 
-  updateChainDepState   _ _ _ _ = return ChainDepStateD
+  updateChainDepState _cfg hdrVw slot tcds =
+    if isLeader hdrVw slot tcds then
+      return ChainDepStateD
+    else
+      throwError $ "leader check failed: " ++ show (hdrVw,slot)
+      
+    -- NF: This should be checking the header's claim to lead the slot.
+
     -- 'apply header' : should be able to fail.
     -- need to check it!
     -- - now LedgerView will be non-trivial
@@ -106,12 +113,19 @@ instance ConsensusProtocol PrtclD where
 pd_config :: ConsensusConfig PrtclD
 pd_config = PrtclD_Config
               { ccpd_securityParam= SecurityParam{maxRollbacks= 1}
+              
+                -- | this would be coming from a config file on the node,
+                --   where this would be unique for each node.
               , ccpd_nodeId       = 0
               }
 
               
 ---- Leadership --------------------------------------------------------------
 
+-- | A simplistic notion of identity that allows for round-robin leader selection.
+--  NodeId's of 0..19 are engaged in an alternating round-robin (see 'isLeader').
+type NodeId = Word64 
+  
 -- | 'ChainDepState PrtclD' is unit for the moment.
 --   TODO: extend to make more realistic.
 data ChainDepStateD = ChainDepStateD
@@ -123,7 +137,8 @@ data instance Ticked ChainDepStateD =
      TickedChainDepStateD LedgerViewD
      deriving (Eq,Show,Generic,NoThunks)
 
--- | A rather degenerate tickChainDepState function, but here we simply want to
+
+-- | A somewhat degenerate tickChainDepState function, but here we simply want to
 --   extract the relevant LedgerView data into our Ticked ChainDepState:
 tickChainDepState' :: Ticked LedgerViewD -> Ticked ChainDepStateD
 tickChainDepState' (TickedLedgerViewD lv) = TickedChainDepStateD lv
@@ -131,12 +146,13 @@ tickChainDepState' (TickedLedgerViewD lv) = TickedChainDepStateD lv
 
 -- | A somewhat fanciful leadership schedule, each epoch chooses a particular
 --   set of 10 nodes to do a round-robin schedule. This set is based on whether
---   our ledger state (a single counter) is odd or even.
-isLeader :: Word64 -> SlotNo -> Ticked ChainDepStateD -> Bool
+--   our ledger state (actually, the LedgerView), a single counter, is odd or
+--   even.
+isLeader :: NodeId -> SlotNo -> Ticked ChainDepStateD -> Bool
 isLeader nodeId (SlotNo slot) (TickedChainDepStateD (LVD cntr)) =
   case cntr `mod` 2 of
-    0 -> slot `mod` 10      == nodeId  -- nodes [0..9]   do a round-robin (even cntr)
-    1 -> (slot `mod` 10)+10 == nodeId  -- nodes [10..19] do a round-robin (odd cntr)
+    0 -> slot `mod` 10      == nodeId  -- nodes [0..9]   do round-robin (if even cntr)
+    1 -> (slot `mod` 10)+10 == nodeId  -- nodes [10..19] do round-robin (if odd cntr)
     _ -> error "panic: the impossible ..."
 
          
@@ -149,16 +165,19 @@ data BlockD = BlockD { bd_header :: Header BlockD
   deriving NoThunks via OnlyCheckWhnfNamed "BlockD" BlockD
 
 
--- associate BlockD to the protocol PrtclD:
+-- associate PrtclD to BlockD:
 
 type instance BlockProtocol BlockD = PrtclD
 
 instance BlockSupportsProtocol BlockD where
-  validateView _bcfg _hdr = ()
-  selectView   _bcfg hdr  = blockNo hdr
+  -- | Gives projection of the header needed to do header validation.
+  --   In PrtclD, just give what's needed for leader check.
+  validateView _bcfg hdr = hbd_nodeId hdr
+
+  selectView   _bcfg hdr = blockNo hdr
                             -- i.e., the default method.
                             -- i.e., we only need the blockNo to do chain selection
-                            -- see ...Protocol.Abstract.preferCandidate
+                            -- see 'preferCandidate'
   
 
 -- The transaction type for BlockD (same as for BlockC)
@@ -191,11 +210,13 @@ slotsInEpoch = 50
   --  - if changed by voting/_ then in the Ledger
   --  - d parameter for Shelley
 
--- epochOf :: WithOrigin SlotNo -> WithOrigin EpochNo  -- FIXME: use this!
-epochOf :: WithOrigin SlotNo -> EpochNo
-epochOf Origin        = EpochNo 0  -- Appears safe to put Origin into epoch 0
-                                   --  argument at call sites!
-epochOf (NotOrigin s) = EpochNo $ unSlotNo s `mod` slotsInEpoch
+-- | note that we preserve the 'WithOrigin in the result',
+-- we don't want to associate an arbitrary EpochNo with 'Origin'.
+-- TODO: bring in NF comments.
+
+epochOf :: WithOrigin SlotNo -> WithOrigin EpochNo
+epochOf Origin        = Origin
+epochOf (NotOrigin s) = NotOrigin $ EpochNo $ unSlotNo s `mod` slotsInEpoch
                         
 nextEpochStartSlot :: WithOrigin SlotNo -> SlotNo
 nextEpochStartSlot wo =
@@ -208,7 +229,7 @@ nextEpochStartSlot wo =
 
 data instance LedgerState BlockD =
   LedgerC
-    { lsbd_tip   :: Point BlockD  -- Point for the last applied block.
+    { lsbd_tip   :: Point BlockD  -- Point of the last applied block.
                                   --   (Point is header hash and slot num)
     , lsbd_count    :: Word64     -- results of the up/down Txs
     , lsbd_snapshot :: Word64     -- snapshot of lsbd_count, made at epoch
@@ -284,6 +305,7 @@ instance ApplyBlock (LedgerState BlockD) BlockD where
       LedgerResult { lrEvents= []
                    , lrResult= ldgrSt{lsbd_tip= blockPoint b}
                    }
+      -- FIXME: BTW, errors?
     where
     slot = blockSlot (getHeader b)
 
@@ -335,7 +357,7 @@ instance LedgerSupportsProtocol BlockD where
     Forecast { forecastAt= at
              , forecastFor= \for->
                  if NotOrigin for < at then
-                    error "panic: precondition violated"
+                    error "precondition violated: 'NotOrigin for >= at'"
                  else if for >= maxFor then
                    throwError $                      
                      OutsideForecastRange
@@ -346,6 +368,7 @@ instance LedgerSupportsProtocol BlockD where
                  else
                    return $ TickedLedgerViewD $ LVD $ lsbd_snapshot ldgrSt
              }
+    
     -- AT LAST SLOT, cannot forecast.
     --  - will we get stuck?
     --  - sound, but practical??
@@ -372,7 +395,7 @@ instance LedgerSupportsMempool BlockD where
   applyTx _lc _wti _slot tx (TickedLedgerStateD ldgrSt) =
     return ( TickedLedgerStateD 
                ldgrSt{lsbd_count= applyTxD tx (lsbd_count ldgrSt)}
-           , ValidatedTxD tx -- no evidence being provided now.
+           , ValidatedTxD tx -- no evidence currently being provided.
            )
     
     where
@@ -407,7 +430,7 @@ instance BasicEnvelopeValidation BlockD where {}
 ---- Data --------------------------------------------------------------------
 
 blockD :: BlockD
-blockD = BlockD { bd_header= HdrBlockD stub stub stub stub -- TODO(low-priority)
+blockD = BlockD { bd_header= HdrBlockD stub stub stub stub stub -- TODO(low-priority)
                 , bd_body  = [TxD Inc, TxD Inc]
                 }
 
@@ -423,6 +446,9 @@ data instance Header BlockD =
     , hbd_BlockNo :: BlockNo
     , hbd_Hash    :: HeaderHash BlockD
     , hbd_prev    :: ChainHash BlockD
+    
+    , hbd_nodeId  :: NodeId  -- this is specific to PrtclD, we need this for
+                             -- the leader proof/check.
     }
   deriving stock    (Show, Eq, Generic)
   deriving anyclass (Serialise)
