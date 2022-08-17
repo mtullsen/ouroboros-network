@@ -20,6 +20,10 @@ import           NoThunks.Class (NoThunks, OnlyCheckWhnfNamed (..))
 -- pkg serialise:
 import           Codec.Serialise
 
+-- pkg ouroboros-network:
+import           Ouroboros.Network.Point
+import           Ouroboros.Network.Block
+
 -- pkg ouroboros-consensus:
 import           Ouroboros.Consensus.Block.Abstract
 import           Ouroboros.Consensus.Block.SupportsProtocol
@@ -39,14 +43,21 @@ import           Test.Utilities
 
 data PrtclD         
 
-data PrtclD_CanBeLeader = PrtclD_CanBeLeader -- Evidence we /can/ lead slots (in general)
-data PrtclD_IsLeader    = PrtclD_IsLeader    -- Evidence we /do/ lead a particular slot.
+-- | Evidence we /can/ lead slots (in general)
+data PrtclD_CanBeLeader = PrtclD_CanBeLeader 
+
+-- | Evidence we /do/ lead a particular slot.
+data PrtclD_IsLeader    = PrtclD_IsLeader    
 
 data instance ConsensusConfig PrtclD =
   PrtclD_Config
-    { ccpd_securityParam :: SecurityParam  -- i.e., 'k'
-    , ccpd_nodeId        :: Word64         -- simplistic method to identify nodes
-                                             -- invariant: this unique for every node
+    { ccpd_securityParam :: SecurityParam  -- ^ i.e., 'k'
+    , ccpd_nodeId        :: Word64
+
+      -- ^ A simplistic method to identify nodes, where we expect this value
+      -- would be extracted from a config file on the node.
+      -- 
+      -- invariant: this value is unique for every node
     }
   deriving (Eq, Show)
   deriving NoThunks via OnlyCheckWhnfNamed "PrtclD_Config"
@@ -61,10 +72,14 @@ instance ConsensusProtocol PrtclD where
   -- | View on a block header required for chain selection.
   --   Here, BlockNo is sufficient (also the default):
   type SelectView    PrtclD = BlockNo
-       -- if two chains w/ same same blockno - which??  how you handle ties: won
-       -- by first block I see, I wouldn't switch to b
-       -- one could sort by blockno & node-ids
-       -- what is a sound way.
+       -- FUTURE:
+       -- NF: How should ties be resolved?                            
+       -- Discussion notes:
+       --  - if two chains w/ same same blockno - which?
+       --  - how do you handle ties: presently won by first block node sees,
+       --    so it couldn't switch to a different chain (when BlockNo's equal).
+       --  - What if we sort by blockno & node-ids?
+       --  - What is a sound way?
                             
   -- | View on the ledger required by the protocol
   type LedgerView    PrtclD = LedgerViewD
@@ -72,7 +87,8 @@ instance ConsensusProtocol PrtclD where
   -- | View on a block header required for header validation
   type ValidateView  PrtclD = NodeId  -- need this for the leader check
                                       -- currently not doing other checks
-  type ValidationErr PrtclD = String  -- 
+                              
+  type ValidationErr PrtclD = String
 
   -- | Am I the leader this slot?
   checkIsLeader cfg PrtclD_CanBeLeader slot tcds =
@@ -106,9 +122,6 @@ instance ConsensusProtocol PrtclD where
 pd_config :: ConsensusConfig PrtclD
 pd_config = PrtclD_Config
               { ccpd_securityParam= SecurityParam{maxRollbacks= 1}
-              
-                -- | this would be coming from a config file on the node,
-                --   where this would be unique for each node.
               , ccpd_nodeId       = 0
               }
 
@@ -119,28 +132,27 @@ pd_config = PrtclD_Config
 --  NodeId's of 0..19 are engaged in an alternating round-robin (see 'isLeader').
 type NodeId = Word64 
   
--- | 'ChainDepState PrtclD' is unit for the moment.
---   TODO: extend to make more realistic.
+-- | 'ChainDepState PrtclD' is effectively unit for the moment.
+--   FUTURE: Extend type to make more realistic.
 data ChainDepStateD = ChainDepStateD
-     deriving (Eq,Show,Generic,NoThunks)
+                      deriving (Eq,Show,Generic,NoThunks)
 
 -- | Our Ticked ChainDepStateD must contain the LedgerViewD, this allows us to
 --   base the leadership schedule on the LedgerState (at the last epoch boundary).
-data instance Ticked ChainDepStateD =
-     TickedChainDepStateD LedgerViewD
-     deriving (Eq,Show,Generic,NoThunks)
+data instance Ticked ChainDepStateD = TickedChainDepStateD LedgerViewD
+                                      deriving (Eq,Show,Generic,NoThunks)
 
 
 -- | A somewhat degenerate tickChainDepState function, but here we simply want to
---   extract the relevant LedgerView data into our Ticked ChainDepState:
+--   extract the relevant LedgerView data into our 'Ticked ChainDepStateD':
 tickChainDepState' :: Ticked LedgerViewD -> Ticked ChainDepStateD
 tickChainDepState' (TickedLedgerViewD lv) = TickedChainDepStateD lv
     
 
 -- | A somewhat fanciful leadership schedule, each epoch chooses a particular
---   set of 10 nodes to do a round-robin schedule. This set is based on whether
---   our ledger state (actually, the LedgerView), a single counter, is odd or
---   even.
+--   set of 10 nodes to do a round-robin schedule. This set we choose is based
+--   on whether the ledger state (the LedgerView actually), a single counter, is
+--   odd or even.
 isLeader :: NodeId -> SlotNo -> Ticked ChainDepStateD -> Bool
 isLeader nodeId (SlotNo slot) (TickedChainDepStateD (LVD cntr)) =
   case cntr `mod` 2 of
@@ -203,19 +215,20 @@ slotsInEpoch = 50
   --  - if changed by voting/_ then in the Ledger
   --  - d parameter for Shelley
 
--- | note that we preserve the 'WithOrigin in the result',
--- we don't want to associate an arbitrary EpochNo with 'Origin'.
--- TODO: bring in more NF comments.
-
+-- | epochOf - Note that we preserve the 'WithOrigin in the result', we don't
+-- want to associate an arbitrary EpochNo with 'Origin', as we try hard to avoid
+-- "ignoring" Origin.
 epochOf :: WithOrigin SlotNo -> WithOrigin EpochNo
 epochOf Origin        = Origin
-epochOf (NotOrigin s) = NotOrigin $ EpochNo $ unSlotNo s `mod` slotsInEpoch
+epochOf (NotOrigin s) = NotOrigin $ EpochNo $ unSlotNo s `div` slotsInEpoch
                         
 nextEpochStartSlot :: WithOrigin SlotNo -> SlotNo
 nextEpochStartSlot wo =
   SlotNo $ case wo of
              Origin         -> slotsInEpoch
-             NotOrigin slot -> (unSlotNo slot `div` slotsInEpoch) + slotsInEpoch
+             NotOrigin slot -> slotsInEpoch + slot' - (slot' `mod` slotsInEpoch)
+                               where
+                               slot' = unSlotNo slot
 
 
 ---- The Ledger State for Block D: Type family instances ---------------------
@@ -227,7 +240,8 @@ data instance LedgerState BlockD =
     , lsbd_count    :: Word64     -- results of the up/down Txs
     , lsbd_snapshot :: Word64     -- snapshot of lsbd_count, made at epoch
                                   --   boundaries
-                                  -- can we move into ChainDepState!
+                                  -- NF: Can we move this into ChainDepState?
+                                  -- TODO: think about this. Answer!
     }
   deriving (Show, Eq, Generic, Serialise, NoThunks)
 
@@ -284,7 +298,6 @@ instance IsLedger (LedgerState BlockD) where
   applyChainTickLedgerResult _cfg slot ldgrSt =
     LedgerResult {lrEvents= [], lrResult= tickLedgerStateD slot ldgrSt}
 
-
 instance ApplyBlock (LedgerState BlockD) BlockD where
   applyBlockLedgerResult ldgrCfg b tickedLdgrSt =
     do
@@ -304,18 +317,18 @@ instance ApplyBlock (LedgerState BlockD) BlockD where
 
   reapplyBlockLedgerResult ldgrCfg b tickedLdgrSt =
     case runExcept $ applyBlockLedgerResult ldgrCfg b tickedLdgrSt of
-      Left s  -> error $ "panic: reapplyBlockLedgerResult: " ++ s
+      Left s  -> error $ "impossible! reapplyBlockLedgerResult: " ++ s
       Right x -> x
       
     -- ASIDE:
-    --   We're not taking advantage of the opportunity of being more efficient
-    --   than 'applyBlockLedgerResult' by skipping checks.  Not needed for this
-    --   Protocol.
+    --   We're not taking advantage of the opportunity of being more
+    --   efficient than 'applyBlockLedgerResult' by skipping checks.  But this
+    --   is not needed for Protocol D.
 
 
 -- | tickLedgerStateD - helper function to tick the LedgerState. Here, in
 --   Protocol/Ledger D, we 'snapshot' the Ledger state (i.e., 'lsbd_count') at
---   epoch boundaries (to use by the leader selection).
+--   epoch boundaries (to be used for leader selection).
 
 tickLedgerStateD ::
   SlotNo -> LedgerState BlockD -> Ticked (LedgerState BlockD)
@@ -342,8 +355,8 @@ instance UpdateLedger BlockD where {}
 
 
 instance LedgerSupportsProtocol BlockD where
-  protocolLedgerView _lcfg (TickedLedgerStateD ldgrSt) =
-    TickedLedgerViewD (LVD( lsbd_snapshot ldgrSt))
+  protocolLedgerView _ldgrCfg (TickedLedgerStateD ldgrSt) =
+    TickedLedgerViewD (LVD $ lsbd_snapshot ldgrSt)
 
   -- | Borrowing somewhat from Ouroboros/Consensus/Byron/Ledger/Ledger.hs
   ledgerViewForecastAt _lccf ldgrSt =
@@ -352,7 +365,7 @@ instance LedgerSupportsProtocol BlockD where
                  if NotOrigin for < at then
                     error "precondition violated: 'NotOrigin for >= at'"
                  else if for >= maxFor then
-                   throwError $                      
+                   throwError
                      OutsideForecastRange
                         { outsideForecastAt    = at
                         , outsideForecastMaxFor= maxFor
@@ -361,29 +374,67 @@ instance LedgerSupportsProtocol BlockD where
                  else
                    return $ TickedLedgerViewD $ LVD $ lsbd_snapshot ldgrSt
              }
-    
-    -- AT LAST SLOT, cannot forecast.
-    --  - will we get stuck?
-    --  - sound, but practical??
-    -- Options?
-    --  1. just call it out: kept things simple, every once in a while there is    --    no forecast.
-    --  2. resolve: have 2 snapshots so we always have 1 epoch of lead time!
-    --    - then maxfor significantly >> 'at' (oldest one has leader sched)
-    --  3. 70% through we do the snapshot then
-    --    - practically we want some "forecast".
-    --     
+
     where
+    -- | the current slot that the ledger reflects
     at :: WithOrigin SlotNo
-    at = pointSlot $ lsbd_tip $ ldgrSt  -- the current slot that the ledger reflects
+    at = pointSlot $ lsbd_tip $ ldgrSt  
 
+    -- | 'maxFor' will be the start of the next epoch, i.e., the slot of the
+    -- next snapshot.  This is when the LedgerView becomes unknown.
     maxFor :: SlotNo
-    maxFor = nextEpochStartSlot at  -- next epoch is time of next snapshot
-                                    -- when our LedgerView becomes unknown.
-
+    maxFor = nextEpochStartSlot at
     
+
+    -- FUTURE:
+    -- The above 'Forecast {}' value is somewhat unsatisfying:
+    --  - At the last slot in an epoch, we cannot forecast.  (TODO: vet!)
+    --    - Will the protocol get stuck?
+    --    - Even if sound, is this practical?
+    --    - FUTURE WORK: we would like formulate some properties of this method
+    --      (with other methods possibly) by which we could be assured of soundness.
+    -- 
+    --  - A more usable ledger would ensure maxFor is _always_ >> 0.
+    -- 
+    -- Alternatives for improving the forecast:
+    --  A. Have two snapshots so we always have one epoch of lead time!
+    --    - then 'maxfor' significantly greater than 'at' (the older snapshot has
+    --      the leader schedule).
+    --  B. When 70% through the epoch, we do the snapshot.
+
+
+---- Examples & Testing of ledgerViewForecastAt ------------------------------
+
+ldgrAtSlot :: SlotNo -> LedgerState BlockD
+ldgrAtSlot slot =
+  LedgerC{ lsbd_tip     = Point (NotOrigin (Block slot "hash"))
+         , lsbd_count   = 5
+         , lsbd_snapshot= 0
+         }
+
+fc :: SlotNo -> Forecast LedgerViewD
+fc ldgrTip = ledgerViewForecastAt () (ldgrAtSlot ldgrTip)
+
+testfc :: Word64 -> Word64 -> Except OutsideForecastRange (Ticked LedgerViewD)
+testfc at' for = forecastFor (fc (SlotNo at')) (SlotNo for)
+
+{- | 
+>>> mapM_ (\i-> print $ testfc 49 i) [49,50,51]
+
+gives
+
+ExceptT (Identity (Right (TickedLedgerViewD (LVD 0))))
+ExceptT (Identity (Left (OutsideForecastRange {outsideForecastAt = At (SlotNo 49), outsideForecastMaxFor = SlotNo 50, outsideForecastFor = SlotNo 50})))
+ExceptT (Identity (Left (OutsideForecastRange {outsideForecastAt = At (SlotNo 49), outsideForecastMaxFor = SlotNo 50, outsideForecastFor = SlotNo 51})))
+
+I.e., at slot 49 we can forecast at slot 49 but no further.
+-}
+
+---- Transactions and Mempools -----------------------------------------------
+
 instance LedgerSupportsMempool BlockD where
   
-  txInvariant _tx = True   -- same as default method
+  txInvariant _tx = True   -- equivalent to the default method
 
   applyTx _lc _wti _slot tx (TickedLedgerStateD ldgrSt) =
     return ( TickedLedgerStateD 
@@ -393,7 +444,7 @@ instance LedgerSupportsMempool BlockD where
     
     where
       
-    -- the essence of Txs affecting ledger state:
+    -- | the essence of how Txs affect the ledger state:
     applyTxD (TxD Inc) i = i+1  
     applyTxD (TxD Dec) i = i-1
 
@@ -412,6 +463,7 @@ instance LedgerSupportsMempool BlockD where
                      
   txForgetValidated (ValidatedTxD tx) = tx
     -- remove evidence of validation (currently non-existent)
+
 
 ---- Let's just ignore these for now -----------------------------------------
 
@@ -450,7 +502,8 @@ data instance Header BlockD =
 instance GetHeader BlockD where
   getHeader          = bd_header
   blockMatchesHeader = \_ _ -> True -- TODO: Prtcl C/D be able to fail
-  headerIsEBB        = const Nothing
+                                    -- NF: stubbed hashing function seems fine?
+  headerIsEBB      _ = Nothing
 
 instance GetPrevHash BlockD where
   headerPrevHash = hbd_prev

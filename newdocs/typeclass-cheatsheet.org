@@ -224,7 +224,7 @@ blockNo = headerFieldBlockNo . getHeaderFields
   - group the "closely related" classes with gray borders
   - ?
     
-- make note of the *few* type constructors in the above signatures
+- make note of the *few* plain type constructors in the above signatures
   - or put into a separate font?
   
 - code notes/

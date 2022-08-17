@@ -333,6 +333,7 @@ test-suite test-examples
 
                      , ouroboros-consensus
                      , ouroboros-consensus-test
+                     , ouroboros-network
 
   default-language:    Haskell2010
   ghc-options:         -Wall
