@@ -247,7 +247,7 @@ data instance LedgerState BlockD =
     , lsbd_snapshot :: Word64     -- snapshot of lsbd_count, made at epoch
                                   --   boundaries
                                   -- NF: Can we move this into ChainDepState?
-                                  -- TODO: think about this. Answer!
+                                  -- Nick: I do not see a way.
     }
   deriving (Show, Eq, Generic, Serialise, NoThunks)
 
