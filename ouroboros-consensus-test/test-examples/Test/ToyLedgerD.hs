@@ -21,7 +21,7 @@ import           NoThunks.Class (NoThunks, OnlyCheckWhnfNamed (..))
 import           Codec.Serialise
 
 -- pkg ouroboros-network:
-import           Ouroboros.Network.Point
+import           Ouroboros.Network.Point  hiding (at)
 import           Ouroboros.Network.Block
 
 -- pkg ouroboros-consensus:
@@ -48,7 +48,9 @@ data PrtclD_CanBeLeader = PrtclD_CanBeLeader
 
 -- | Evidence we /do/ lead a particular slot.
 data PrtclD_IsLeader    = PrtclD_IsLeader    
-
+                          -- TODO: include NodeId here?
+                          --  - currently never reading this!?
+                          
 data instance ConsensusConfig PrtclD =
   PrtclD_Config
     { ccpd_securityParam :: SecurityParam  -- ^ i.e., 'k'
@@ -93,7 +95,7 @@ instance ConsensusProtocol PrtclD where
   -- | Am I the leader this slot?
   checkIsLeader cfg PrtclD_CanBeLeader slot tcds =
     if isLeader (ccpd_nodeId cfg) slot tcds then 
-      Just PrtclD_IsLeader  -- TODO: should this be my NodeId?
+      Just PrtclD_IsLeader
     else
       Nothing
     
@@ -311,7 +313,6 @@ instance ApplyBlock (LedgerState BlockD) BlockD where
       LedgerResult { lrEvents= []
                    , lrResult= ldgrSt{lsbd_tip= blockPoint b}
                    }
-      -- FIXME: BTW, want to demonstrate possibility for error?
     where
     slot = blockSlot (getHeader b)
 
@@ -385,25 +386,26 @@ instance LedgerSupportsProtocol BlockD where
     maxFor :: SlotNo
     maxFor = nextEpochStartSlot at
     
+    {-
+    FUTURE:
+    The above 'Forecast {}' value is somewhat unsatisfying:
+     - At the last slot in an epoch, we cannot forecast (beyond current slot)
+       - Will the protocol get stuck?
+       - Even if sound, is this practical?
+       - FUTURE WORK: we would like formulate some properties of this method
+         (with other methods possibly) by which we could be assured of soundness.
+    
+     - A more usable ledger would ensure maxFor is _always_ >> 0.
+    
+    Alternatives for improving the forecast:
+     A. Have two snapshots so we always have one epoch of lead time!
+       - then 'maxfor' significantly greater than 'at' (the older snapshot has
+         the leader schedule).
+     B. When 70% through the epoch, we do the snapshot.
+    -}
 
-    -- FUTURE:
-    -- The above 'Forecast {}' value is somewhat unsatisfying:
-    --  - At the last slot in an epoch, we cannot forecast.  (TODO: vet!)
-    --    - Will the protocol get stuck?
-    --    - Even if sound, is this practical?
-    --    - FUTURE WORK: we would like formulate some properties of this method
-    --      (with other methods possibly) by which we could be assured of soundness.
-    -- 
-    --  - A more usable ledger would ensure maxFor is _always_ >> 0.
-    -- 
-    -- Alternatives for improving the forecast:
-    --  A. Have two snapshots so we always have one epoch of lead time!
-    --    - then 'maxfor' significantly greater than 'at' (the older snapshot has
-    --      the leader schedule).
-    --  B. When 70% through the epoch, we do the snapshot.
 
-
----- Examples & Testing of ledgerViewForecastAt ------------------------------
+---- Examples & Testing: ledgerViewForecastAt --------------------------------
 
 ldgrAtSlot :: SlotNo -> LedgerState BlockD
 ldgrAtSlot slot =
@@ -420,8 +422,6 @@ testfc at' for = forecastFor (fc (SlotNo at')) (SlotNo for)
 
 {- | 
 >>> mapM_ (\i-> print $ testfc 49 i) [49,50,51]
-
-gives
 
 ExceptT (Identity (Right (TickedLedgerViewD (LVD 0))))
 ExceptT (Identity (Left (OutsideForecastRange {outsideForecastAt = At (SlotNo 49), outsideForecastMaxFor = SlotNo 50, outsideForecastFor = SlotNo 50})))
@@ -441,6 +441,7 @@ instance LedgerSupportsMempool BlockD where
                ldgrSt{lsbd_count= applyTxD tx (lsbd_count ldgrSt)}
            , ValidatedTxD tx -- no evidence currently being provided.
            )
+    -- FUTURE: expand with Tx's that can fail.
     
     where
       
@@ -472,13 +473,18 @@ instance ValidateEnvelope        BlockD where {}
 instance BasicEnvelopeValidation BlockD where {}
 
 
----- Data --------------------------------------------------------------------
+---- Examples & Testing: blocks ----------------------------------------------
 
 blockD :: BlockD
-blockD = BlockD { bd_header= HdrBlockD stub stub stub stub stub -- TODO(low-priority)
-                , bd_body  = [TxD Inc, TxD Inc]
-                }
-
+blockD =
+  BlockD { bd_header= HdrBlockD{ hbd_SlotNo = SlotNo 10
+                               , hbd_BlockNo= BlockNo 8
+                               , hbd_Hash   = "hash"
+                               , hbd_prev   = BlockHash "hash"
+                               , hbd_nodeId = 5
+                               }
+         , bd_body  = [TxD Inc, TxD Inc]
+         }
 
 
 ---- header miscellanea ------------------------------------------------------
