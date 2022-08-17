@@ -492,6 +492,7 @@ blockD =
   where
   body = [TxD Inc, TxD Inc]
 
+testBlockD :: Bool
 testBlockD = blockMatchesHeader (bd_header blockD) blockD
 
 ---- header miscellanea ------------------------------------------------------
