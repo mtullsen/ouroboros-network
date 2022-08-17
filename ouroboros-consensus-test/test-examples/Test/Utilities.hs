@@ -1,7 +1,29 @@
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE DerivingStrategies         #-}
+{-# LANGUAGE DeriveGeneric              #-}
+{-# LANGUAGE DeriveAnyClass             #-}
+
 module Test.Utilities where
 
+-- base pkgs:
+import           GHC.Generics (Generic)
 
-type Hash = String  -- FIXME: any need to get more complicated?
+-- pkg nothunks:
+import           NoThunks.Class (NoThunks, OnlyCheckWhnfNamed (..))
+
+-- pkg hashable:
+import           Data.Hashable
+
+-- pkg serialise:
+import           Codec.Serialise
+
+
+newtype Hash = Hash Int
+  deriving stock    (Eq, Ord, Show, Generic)
+  deriving newtype  (NoThunks, Hashable, Serialise)
+
+hash' :: Hashable a => a -> Hash
+hash' = Hash . hash
 
 tickStub :: a
 tickStub = error "tickstub"

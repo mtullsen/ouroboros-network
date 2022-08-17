@@ -5,6 +5,7 @@
 {-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE DeriveAnyClass             #-}
 {-# LANGUAGE MultiParamTypeClasses      #-}
+{-# LANGUAGE StandaloneDeriving         #-}
 
 module Test.ToyLedgerD where
 
@@ -16,6 +17,9 @@ import           GHC.Generics (Generic)
 
 -- pkg nothunks:
 import           NoThunks.Class (NoThunks, OnlyCheckWhnfNamed (..))
+
+-- pkg hashable:
+import           Data.Hashable
 
 -- pkg serialise:
 import           Codec.Serialise
@@ -49,7 +53,7 @@ data PrtclD_CanBeLeader = PrtclD_CanBeLeader
 -- | Evidence we /do/ lead a particular slot.
 data PrtclD_IsLeader    = PrtclD_IsLeader    
                           -- TODO: include NodeId here?
-                          --  - currently never reading this!?
+                          --  - currently never reading this!? Nick?
                           
 data instance ConsensusConfig PrtclD =
   PrtclD_Config
@@ -117,7 +121,7 @@ instance ConsensusProtocol PrtclD where
 -- any node with same genesis block.
 --  - parameter that affects leader schedule.
 --  - ?
--- NF
+-- NF:
 --  - parts of the config must be derived from the genesis block.
 --  - ?
 
@@ -190,10 +194,10 @@ instance BlockSupportsProtocol BlockD where
 -- The transaction type for BlockD (same as for BlockC)
 
 data Tx = Inc | Dec
-  deriving (Show, Eq, Generic, Serialise, NoThunks)
+  deriving (Show, Eq, Generic, Serialise, NoThunks, Hashable)
 
 data instance GenTx BlockD = TxD Tx
-  deriving (Show, Eq, Generic, Serialise, NoThunks)
+  deriving (Show, Eq, Generic, Serialise, NoThunks, Hashable)
 
 
 -- | And what it means for the transaction to be Validated (trivial for now)
@@ -409,7 +413,7 @@ instance LedgerSupportsProtocol BlockD where
 
 ldgrAtSlot :: SlotNo -> LedgerState BlockD
 ldgrAtSlot slot =
-  LedgerC{ lsbd_tip     = Point (NotOrigin (Block slot "hash"))
+  LedgerC{ lsbd_tip     = Point (NotOrigin (Block slot (Hash 0)))
          , lsbd_count   = 5
          , lsbd_snapshot= 0
          }
@@ -479,13 +483,16 @@ blockD :: BlockD
 blockD =
   BlockD { bd_header= HdrBlockD{ hbd_SlotNo = SlotNo 10
                                , hbd_BlockNo= BlockNo 8
-                               , hbd_Hash   = "hash"
-                               , hbd_prev   = BlockHash "hash"
+                               , hbd_Hash   = hash' body
+                               , hbd_prev   = BlockHash (Hash 1)
                                , hbd_nodeId = 5
                                }
-         , bd_body  = [TxD Inc, TxD Inc]
+         , bd_body  = body
          }
+  where
+  body = [TxD Inc, TxD Inc]
 
+testBlockD = blockMatchesHeader (bd_header blockD) blockD
 
 ---- header miscellanea ------------------------------------------------------
 -- For Doc: just skim over.
@@ -507,8 +514,10 @@ data instance Header BlockD =
 
 instance GetHeader BlockD where
   getHeader          = bd_header
-  blockMatchesHeader = \_ _ -> True -- TODO: Prtcl C/D be able to fail
-                                    -- NF: stubbed hashing function seems fine?
+  
+  blockMatchesHeader hdr blk =
+    hbd_Hash hdr == hash' (bd_body blk)
+        
   headerIsEBB      _ = Nothing
 
 instance GetPrevHash BlockD where
@@ -522,7 +531,7 @@ instance HasHeader (Header BlockD) where
                           }
 
 instance HasHeader BlockD where
-  getHeaderFields = castHeaderFields       -- Q. worth some commentary?
+  getHeaderFields = castHeaderFields
                   . getHeaderFields
                   . bd_header
                     
