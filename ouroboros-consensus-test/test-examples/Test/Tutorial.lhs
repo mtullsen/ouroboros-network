@@ -41,6 +41,43 @@ First, some imports we'll need:
 > import Ouroboros.Consensus.Forecast (trivialForecast)
 > import Ouroboros.Consensus.HeaderValidation (ValidateEnvelope, BasicEnvelopeValidation, HasAnnTip)
 
+Conceptual Overview and Definitions of Key Terms
+================================================
+
+The object of interest to consensus is the **blockchain**.
+
+Within the context of this discussion a blockchain is linked-list-style
+chain of **blocks**, but its behavior is also subject to an integer-valued
+logical clock whose value is known as a **slot**.  The event that
+increments this clock is called a **tick**.
+
+Each block is associated single slot, though not every slot is associated with a block.
+No two blocks have the same slot.  With that in mind, another way to consider the structure
+of a chain is to think of it as as a list of blocks each of which is separated by one or
+more ticks.
+
+We can then think of folding over this blockchain structure to compute some
+value that summarizes the entire history of the chain (blocks and ticks) in some way.
+This same value might also be used to determine if a subsequent block is valid.
+Computing this value is the responsibility of the **ledger** and the **ledger state**
+is the computed value.
+
+`ouroborus-consensus` combines features of much of this infrastructure taking
+(possibly simplified) views of blocks and the ledger and using them to decide
+between different proposed chains to implement eventual consistency across
+the nodes.
+
+The `Ticked` Family - Modeling the Passage of Time
+--------------------------------------------------
+
+Instances of the `Ticked` type family represents things that can evolve with respect
+to ticks - `Ticked a` is the type representing an `a` at some number of slots
+in the future.
+
+In this tutorial none of the implementations of `Ticked` will be especially
+interesting and will more or less be isomorphic to the `Identity` functor.
+Even if this is the case, `Ticked` helps us maintain some invariants -
+such as it being important that at least one tick happens between blocks.
 
 
 The `ConsensusProtocol` typeclass
@@ -95,10 +132,8 @@ Next, we instantiate the `ConsensusProtocol` for `SP`:
 
 Finally we define a few extra things used in this instantiation:
 
-**TODO: more detail**
-
 > data SP_CanBeLeader = SP_CanBeLeader -- Evidence that we /can/ be a leader
-> data SP_IsLeader    = SP_IsLeader    -- Evidence that we /are/ leader>
+> data SP_IsLeader    = SP_IsLeader    -- Evidence that we /are/ leader
 >
 > k :: SecurityParam
 > k = SecurityParam { maxRollbacks = 1 }
@@ -107,8 +142,6 @@ Let's examine each of these in turn:
 
 Chain Selection: `SelectView`
 -----------------------------
-
-**TODO: why does the protocol need to select chains - either add material here ore in the overview**
 
 One of the major decisions when implementing a consensus protocol is encoding a
 policy for chain selection.  The `SelectView SP` type represents the information
@@ -136,10 +169,6 @@ on the ledger's state, `LedgerState blk`.  The data required from the ledger
 is of type `LedgerView p` (i.e., the protocol determines what is needed).
 Similar to `SelectView` the projection of `LedgerState blk` into `LedgerView p` exists
 in a typeclass, namely `LedgerSupportsProtocol`.
-
-
-**TODO: there's some subtlety here wrt `LedgerView` and prediction that might
-be worth discussing.**
 
 For `SP` we do not require any information from the ledger to make
 decisions of any kind.  In the Praos protocol, the `LedgerView`
@@ -181,8 +210,9 @@ Protocol State: `tickChainDepState`, `updateChainDepState` and `reupdateChainDep
 These three functions model state transitions of values of type `ChainDepState`
 
 `tickChainDepState` computes a new `ChainDepState` from a prior state though
-a computation that models the (logical) passage of time.
-**TODO: more about `Ticked`** **:(MT) how about in pill-N**
+a computation that models the (logical) passage of time.  In particular,
+it evolves the `chainDepState` some number of ticks given by the `SlotNo` argument.
+
 Unlike `updateChainDepState` this cannot fail under normal circumstances - if
 it could, that would mean there is some failure that is inevitable given
 the passage of time and if that is the case there would have been no reason
@@ -196,16 +226,12 @@ the needed view of the header, `ValidateView p`.  This could fail, producing a
 is called when the header is known to be good (e.g., from a previous call to `updateChainDepState`)
 and the header check is unneeded.
 
-**TODO: explain what SP's implementation means**
+In the case of `SP` since the `chainDepState` is `()` these functions are
+not very interesting.  In the case of `tickChainDepState`, `TickedTrivial`
+is simply the `Ticked` instance for `()`.
 
 Leader Selection: `IsLeader`, `CanBeLeader`, `checkIsLeader`
 ------------------------------------------------------------
-
-
-
-**TODO: more about leadership conceptually somewhere?**
-
-**TODO: is leadership used anywhere else?**
 
 The type family `CanBeLeader` represents the ability for a particular node
 in the protocol to be a leader for a slot.  Put another way, a value of `CanBeLeader p` for a particular `p`
@@ -485,14 +511,13 @@ seen.
 The `Point` type (defined in `Ouroboros.Network.Block`) describes a particular
 place in the blockchain - a pair of a slot and a block hash.
 
-`Ticked` - Modeling the Passage of Time
+`Ticked (LedgerState BlockC)`
 ---------------------------------------
 
-The slot abstraction defines a logical clock - and instances of the `Ticked` family
+Again, the slot abstraction defines a logical clock - and instances of the `Ticked` family
 describe values that evolve with respect to this logical clock.
 As such, we will also need to define an instance of `Ticked`
-for our ledger state.  In the particular case of our example, this is essentially
-an `Identity` functor:
+for our ledger state.  In our example, this is essentially an `Identity` functor:
 
 > newtype instance Ticked (LedgerState BlockC) =
 >   TickedLedgerStateC {
@@ -629,7 +654,7 @@ not use any information from the ledger to make any decisions and since
 `LedgerView SP` is simply `()` - we use `TickedTrivial` here for
 the implementation of protocolLedgerView which constructs a `Ticked ()` value.
 
-`ledgerViewForecastAt` returns a `Forecast` (defined in `Ouroboros.Consensus.Forecast``)
+`ledgerViewForecastAt` returns a `Forecast` (defined in `Ouroboros.Consensus.Forecast`)
 of a `LedgerView` - where a `Forecast` is a starting point `forecastAt` together with a
 function `forecastFor` which takes a slot number and either produces a forecasted value
 for that slot - in this case a possible future `LedgerView` at that slot.
