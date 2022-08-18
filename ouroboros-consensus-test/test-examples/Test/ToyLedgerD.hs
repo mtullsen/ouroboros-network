@@ -49,23 +49,35 @@ import           Test.Utilities
 
 data PrtclD         
 
--- | Evidence we /can/ lead slots (in general)
-data PrtclD_CanBeLeader = PrtclD_CanBeLeader 
+-- | A simplistic notion of node identity that allows for round-robin leader
+--  selection.  NodeId's of 0..19 are engaged in an alternating round-robin (see
+--  'isLeader').  All nodes that can lead must have an identifier.
+type NodeId = Word64 
+  
+-- | Evidence that we /can/ lead slots (in general)
+--
+-- NOTE: In PrtclD, the evidence is easily forged, but we will use the NodeId, in the
+--  range [0..19].
+data PrtclD_CanBeLeader = PrtclD_CanBeLeader NodeId
+                          deriving (Eq, Show, Generic, NoThunks)
 
--- | Evidence we /do/ lead a particular slot.
-data PrtclD_IsLeader    = PrtclD_IsLeader    
-                          -- TODO: include NodeId here?
-                          --  - currently never reading this!? Nick?
+-- | Evidence that we /do/ lead a particular slot.
+-- 
+-- NOTE:
+--   In Shelley, for instance, this would be a crypto proof we lead a slot,
+--   and that proof would be in the block header.
+
+data PrtclD_IsLeader    = PrtclD_IsLeader
                           
 data instance ConsensusConfig PrtclD =
   PrtclD_Config
     { ccpd_securityParam :: SecurityParam  -- ^ i.e., 'k'
-    , ccpd_nodeId        :: Word64
+    , ccpd_nodeId        :: Maybe PrtclD_CanBeLeader
 
-      -- ^ A simplistic method to identify nodes, where we expect this value
-      -- would be extracted from a config file on the node.
+      -- ^ Leader nodes must have a 'ccpd_nodeId' equal to 'Just (PrtclD_CanBeLeader nodeid)',
+      -- We expect this value would be extracted from a config file.
       -- 
-      -- invariant: this value is unique for every node
+      -- Invariant: nodeid's are unique.
     }
   deriving (Eq, Show)
   deriving NoThunks via OnlyCheckWhnfNamed "PrtclD_Config"
@@ -77,14 +89,13 @@ instance ConsensusProtocol PrtclD where
   type IsLeader      PrtclD = PrtclD_IsLeader
   type CanBeLeader   PrtclD = PrtclD_CanBeLeader
   
-  -- | View on a block header required for chain selection.
-  --   Here, BlockNo is sufficient (also the default):
+  -- | View on a block header required for chain selection.  Here, BlockNo is
+  --   sufficient. (BlockNo is also the default type for this type family.)
   type SelectView    PrtclD = BlockNo
        -- FUTURE:
-       -- NF: How should ties be resolved?                            
-       -- Discussion notes:
-       --  - if two chains w/ same same blockno - which?
-       --  - how do you handle ties: presently won by first block node sees,
+       -- Discussion of the ramifications of the simple BlockNo:
+       --  - If two chains have same same blockno - which?
+       --  - Here, a tie is won by the first block that a node sees,
        --    so it couldn't switch to a different chain (when BlockNo's equal).
        --  - What if we sort by blockno & node-ids?
        --  - What is a sound way?
@@ -98,20 +109,40 @@ instance ConsensusProtocol PrtclD where
                               
   type ValidationErr PrtclD = String
 
-  -- | Am I the leader this slot?
-  checkIsLeader cfg PrtclD_CanBeLeader slot tcds =
-    if isLeader (ccpd_nodeId cfg) slot tcds then 
-      Just PrtclD_IsLeader
-    else
-      Nothing
-    
+  -- | checkIsLeader - Am I the leader this slot?
+  -- 
+  -- NOTE: For Protocol D
+  --   - there is no real evidence of leadership in this protocol
+  --   - what might be akin to a private key (for generating evidence) is
+  --     extracted from the configuration using 'cpd_nodeId cfg'
+  --   thus, for this simple example, we ignore the '_cbl :: PrtclD_CanBeLeader' argument.
+  --
+  -- NOTE: In a more realistic Protocol
+  --  - We would expect:
+  --    - 'checkIsLeader' to be creating IsLeader evidence from CanBeLeader evidence.
+  --    - the IsLeader evidence to end up in the block header (as this method will be invoked
+  --      as part of block forging).
+  --  - From the point of view of consumers of headers,
+  --    - The IsLeader evidence would be a part of the ValidateView projection of the header.
+  --    - (As an aside: in the real system, the whole header is the ValidateView.)
+  
+  checkIsLeader cfg _cbl slot tcds =
+    case ccpd_nodeId cfg of
+      Just (PrtclD_CanBeLeader nodeId)
+        | isLeader nodeId slot tcds -> Just PrtclD_IsLeader  -- not providing any proof
+      _                             -> Nothing
+      
   protocolSecurityParam = ccpd_securityParam
 
   tickChainDepState _cfg tlv _slot _cds =
     tickChainDepState' tlv
 
-  -- | apply the header (hdrView), do a header check.
-  --   - here we check the block's claim to lead the slot.
+  -- | apply the header (hdrView) and do a header check.
+  -- 
+  -- Here we check the block's claim to lead the slot (though in Protocol D,
+  -- this doesn't give us too much confidence, as there is nothing that
+  -- precludes a node from masquerading as any other node).
+  
   updateChainDepState _cfg hdrVw slot tcds =
     if isLeader hdrVw slot tcds then
       return ChainDepStateD
@@ -120,26 +151,16 @@ instance ConsensusProtocol PrtclD where
       
   reupdateChainDepState _ _ _ _ = ChainDepStateD
 
--- any node with same genesis block.
---  - parameter that affects leader schedule.
---  - ?
--- NF:
---  - parts of the config must be derived from the genesis block.
---  - ?
 
 pd_config :: ConsensusConfig PrtclD
 pd_config = PrtclD_Config
               { ccpd_securityParam= SecurityParam{maxRollbacks= 1}
-              , ccpd_nodeId       = 0
+              , ccpd_nodeId       = Just (PrtclD_CanBeLeader 0)
               }
 
               
 ---- Leadership --------------------------------------------------------------
 
--- | A simplistic notion of identity that allows for round-robin leader selection.
---  NodeId's of 0..19 are engaged in an alternating round-robin (see 'isLeader').
-type NodeId = Word64 
-  
 -- | 'ChainDepState PrtclD' is effectively unit for the moment.
 --   FUTURE: Extend type to make more realistic.
 data ChainDepStateD = ChainDepStateD
@@ -183,49 +204,62 @@ data BlockD = BlockD { bd_header :: Header BlockD
 type instance BlockProtocol BlockD = PrtclD
 
 instance BlockSupportsProtocol BlockD where
+  
   -- | Gives projection of the header needed to do header validation.
   --   In PrtclD, just give what's needed for leader check.
+
   validateView _bcfg hdr = hbd_nodeId hdr
 
+  -- | 'selectView' here is just the default method.
+  -- I.e., we only need the blockNo to do chain selection,
+  -- this is used by 'preferCandidate'.
+  
   selectView   _bcfg hdr = blockNo hdr
-                            -- i.e., the default method.
-                            -- i.e., we only need the blockNo to do chain selection
-                            -- see 'preferCandidate'
   
 
--- The transaction type for BlockD (same as for BlockC)
-
+-- | The transaction type for BlockD (same as for BlockC)
 data Tx = Inc | Dec
   deriving (Show, Eq, Generic, Serialise, NoThunks, Hashable)
+
 
 data instance GenTx BlockD = TxD Tx
   deriving (Show, Eq, Generic, Serialise, NoThunks, Hashable)
 
 
--- | And what it means for the transaction to be Validated (trivial for now)
---   Note that Validated must include the transaction as well as the evidence
-
+-- | Defining what it means for the transaction to be Validated (trivial for now):
+--   Note that Validated must include the transaction as well as the evidence.
 data instance Validated (GenTx BlockD) = ValidatedTxD (GenTx BlockD)
   deriving (Show, Eq, Generic, Serialise)
   deriving NoThunks
 
 
----- A simplistic concept of Epochs ------------------------------------------
+---- A simple concept of Epochs ----------------------------------------------
 
+-- | slotsInEpoch -
+-- 
+-- For Protocol D, we make this parameter simple, it is defined at the top level
+-- and is thus fixed for all eternity:
+-- 
+--   It's not in the 'ConsensusConfig', it cannot affect the 'LedgerState', it
+--   is not determined by anything in the genesis block [not sure I know what
+--   I'm talking about here].
+--
+-- FUTURE:
+-- The Protocol could be extended to be more complex in multiple ways:
+--   1. If 'slotsInEpoch' was, rather, part of the ConsensusConfig,
+--     - Each node must be configured the same, otherwise a node would be part of a different blockchain.
+--     - Possibly this config value would be determined from the Genesis block?
+--   2. Furthermore, if we wanted 'slotsInEpoch' to be mutable:
+--     - it would need to be in the LedgerState and more transactions (such as voting) would be
+--       required to allow for this.
+-- 
 slotsInEpoch :: Word64
 slotsInEpoch = 50
-  -- TODO: more interesting to put this into LedgerCfg?
-  -- - yes, but Genesis block: has initial values for _, then on-chain changes
-  -- - just block specific (not in Ledger).
-  -- consensus config for a block must have initial values.
-  --  - 'k' = K, not expected
-  --  - k into consensusConfig (or ledgerConfig!)
-  --  - if changed by voting/_ then in the Ledger
-  --  - d parameter for Shelley
 
--- | epochOf - Note that we preserve the 'WithOrigin in the result', we don't
+
+-- | epochOf - Note that we preserve the 'WithOrigin' in the result, we don't
 -- want to associate an arbitrary EpochNo with 'Origin', as we try hard to avoid
--- "ignoring" Origin.
+-- ignoring Origin in the Ouroboros codebase.
 epochOf :: WithOrigin SlotNo -> WithOrigin EpochNo
 epochOf Origin        = Origin
 epochOf (NotOrigin s) = NotOrigin $ EpochNo $ unSlotNo s `div` slotsInEpoch
@@ -243,13 +277,11 @@ nextEpochStartSlot wo =
 
 data instance LedgerState BlockD =
   LedgerC
-    { lsbd_tip   :: Point BlockD  -- Point of the last applied block.
-                                  --   (Point is header hash and slot num)
-    , lsbd_count    :: Word64     -- results of the up/down Txs
-    , lsbd_snapshot :: Word64     -- snapshot of lsbd_count, made at epoch
-                                  --   boundaries
-                                  -- NF: Can we move this into ChainDepState?
-                                  -- Nick: I do not see a way.
+    { lsbd_tip   :: Point BlockD  -- ^ Point of the last applied block.
+                                  --   (Point is header hash and slot no.)
+    , lsbd_count    :: Word64     -- ^ results of the up/down Txs
+    , lsbd_snapshot :: Word64     -- ^ snapshot of lsbd_count, made at epoch
+                                  --   boundaries.
     }
   deriving (Show, Eq, Generic, Serialise, NoThunks)
 
@@ -272,7 +304,7 @@ newtype instance Ticked LedgerViewD = TickedLedgerViewD LedgerViewD
   deriving (Show, Eq, Generic, Serialise, NoThunks)
 
 
--- No LedgerCfg data:
+-- We need no LedgerCfg data:
 type instance LedgerCfg (LedgerState BlockD) = ()
 
 type LedgerErr_BlockD = String
@@ -370,7 +402,7 @@ instance LedgerSupportsProtocol BlockD where
     Forecast { forecastAt= at
              , forecastFor= \for->
                  if NotOrigin for < at then
-                    error "precondition violated: 'NotOrigin for >= at'"
+                   error "precondition violated: 'NotOrigin for >= at'"
                  else if for >= maxFor then
                    throwError
                      OutsideForecastRange
@@ -387,7 +419,11 @@ instance LedgerSupportsProtocol BlockD where
     at :: WithOrigin SlotNo
     at = pointSlot $ lsbd_tip $ ldgrSt  
 
-    -- | 'maxFor' will be the start of the next epoch, i.e., the slot of the
+    -- | 'maxFor' is the "exclusive upper bound on the range of the forecast"
+    -- (the name "max" does seem wrong, but we are following suit with the names
+    -- and terminology in the 'Ouroboros.Consensus.Forecast' module)
+    --
+    -- In our case it will be the start of the next epoch, i.e., the slot of the
     -- next snapshot.  This is when the LedgerView becomes unknown.
     maxFor :: SlotNo
     maxFor = nextEpochStartSlot at
@@ -398,8 +434,8 @@ instance LedgerSupportsProtocol BlockD where
      - At the last slot in an epoch, we cannot forecast (beyond current slot)
        - Will the protocol get stuck?
        - Even if sound, is this practical?
-       - FUTURE WORK: we would like formulate some properties of this method
-         (with other methods possibly) by which we could be assured of soundness.
+       - FUTURE WORK: we would like formulate some properties by which we might
+         be assured of soundness.
     
      - A more usable ledger would ensure maxFor is _always_ >> 0.
     
@@ -420,14 +456,14 @@ ldgrAtSlot slot =
          , lsbd_snapshot= 0
          }
 
-fc :: SlotNo -> Forecast LedgerViewD
-fc ldgrTip = ledgerViewForecastAt () (ldgrAtSlot ldgrTip)
+makeForecast :: SlotNo -> Forecast LedgerViewD
+makeForecast tipslot = ledgerViewForecastAt () (ldgrAtSlot tipslot)
 
-testfc :: Word64 -> Word64 -> Except OutsideForecastRange (Ticked LedgerViewD)
-testfc at' for = forecastFor (fc (SlotNo at')) (SlotNo for)
+testForecast :: Word64 -> Word64 -> Except OutsideForecastRange (Ticked LedgerViewD)
+testForecast at' for = forecastFor (makeForecast (SlotNo at')) (SlotNo for)
 
 {- | 
->>> mapM_ (\i-> print $ testfc 49 i) [49,50,51]
+>>> mapM_ (\i-> print $ testForecast 49 i) [49,50,51]  -- slot 50 is next epoch.
 
 ExceptT (Identity (Right (TickedLedgerViewD (LVD 0))))
 ExceptT (Identity (Left (OutsideForecastRange {outsideForecastAt = At (SlotNo 49), outsideForecastMaxFor = SlotNo 50, outsideForecastFor = SlotNo 50})))
@@ -436,11 +472,13 @@ ExceptT (Identity (Left (OutsideForecastRange {outsideForecastAt = At (SlotNo 49
 I.e., at slot 49 we can forecast at slot 49 but no further.
 -}
 
+
 ---- Transactions and Mempools -----------------------------------------------
 
 instance LedgerSupportsMempool BlockD where
-  
-  txInvariant _tx = True   -- equivalent to the default method
+
+  -- | equivalent to the default method:
+  txInvariant _tx = True   
 
   applyTx _lc _wti _slot tx (TickedLedgerStateD ldgrSt) =
     return ( TickedLedgerStateD 
@@ -468,8 +506,8 @@ instance LedgerSupportsMempool BlockD where
                          -- For BlockD, our Txs are all the same size
                          -- '2' probably not right
                      
+  -- | remove evidence of validation (currently no evidence)
   txForgetValidated (ValidatedTxD tx) = tx
-    -- remove evidence of validation (currently non-existent)
 
 
 ---- Let's just ignore these for now -----------------------------------------
@@ -482,34 +520,51 @@ instance BasicEnvelopeValidation BlockD where {}
 ---- Examples & Testing: blocks ----------------------------------------------
 
 blockD :: BlockD
-blockD =
-  BlockD { bd_header= HdrBlockD{ hbd_SlotNo = SlotNo 10
-                               , hbd_BlockNo= BlockNo 8
-                               , hbd_Hash   = hash' body
-                               , hbd_prev   = BlockHash (Hash 1)
-                               , hbd_nodeId = 5
-                               }
-         , bd_body  = body
-         }
-  where
-  body = [TxD Inc, TxD Inc]
+blockD = addBlockHash $
+           BlockD 
+             HdrBlockD{ hbd_SlotNo = SlotNo 10
+                      , hbd_BlockNo= BlockNo 8
+                      , hbd_Hash   = error "panic: shouldn't be read"
+                      , hbd_prev   = BlockHash (Hash 1)  -- header hash is hash of header & block
+                      , hbd_nodeId = 5
+                      }
+             [TxD Inc, TxD Inc]  
 
 testBlockD :: Bool
 testBlockD = blockMatchesHeader (bd_header blockD) blockD
 
+---- Hashing BlockD ----------------------------------------------------------
+
+addBlockHash :: BlockD -> BlockD
+addBlockHash b = 
+  BlockD { bd_header= (bd_header b){hbd_Hash = computeBlockHash b}
+         , bd_body  = bd_body b
+         }
+
+computeBlockHash :: BlockD -> Hash
+computeBlockHash (BlockD hdr body) = hash' (hdr{hbd_Hash=Hash 0}, body)
+
+-- and the Hashable instances needed for this:
+
+deriving instance Hashable (Header BlockD)
+deriving instance Hashable (ChainHash BlockD)
+deriving instance Hashable SlotNo
+deriving instance Hashable BlockNo
+
+
 ---- header miscellanea ------------------------------------------------------
--- For Doc: just skim over.
 
 -- | the minimum header:
 data instance Header BlockD =
   HdrBlockD
+    -- generic fields we need for all protocols:
     { hbd_SlotNo  :: SlotNo
     , hbd_BlockNo :: BlockNo
-    , hbd_Hash    :: HeaderHash BlockD
+    , hbd_Hash    :: HeaderHash BlockD -- hash of whole block (excepting this field)
     , hbd_prev    :: ChainHash BlockD
-    
-    , hbd_nodeId  :: NodeId  -- this is specific to PrtclD, we need this for
-                             -- the leader proof/check.
+
+    -- this is specific to PrtclD, we need this for the leader proof/check:
+    , hbd_nodeId  :: NodeId 
     }
   deriving stock    (Show, Eq, Generic)
   deriving anyclass (Serialise)
@@ -519,8 +574,9 @@ instance GetHeader BlockD where
   getHeader          = bd_header
   
   blockMatchesHeader hdr blk =
-    hbd_Hash hdr == hash' (bd_body blk)
-        
+    hbd_Hash hdr == computeBlockHash blk
+
+  -- | Protocol D has no EBBs, fortunately.
   headerIsEBB      _ = Nothing
 
 instance GetPrevHash BlockD where
@@ -542,7 +598,6 @@ type instance HeaderHash BlockD = Hash
 
 instance StandardHash BlockD
 
-
 ---- Configuration boilerplate: ----------------------------------------------
 
 data instance BlockConfig BlockD = BCfgBlockD
@@ -551,6 +606,3 @@ data instance CodecConfig BlockD = CCfgBlockD
   deriving (Generic, NoThunks)
 data instance StorageConfig BlockD = SCfgBlockD
   deriving (Generic, NoThunks)
-
-
-
