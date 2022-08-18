@@ -9,7 +9,7 @@ module Test.Utilities where
 import           GHC.Generics (Generic)
 
 -- pkg nothunks:
-import           NoThunks.Class (NoThunks, OnlyCheckWhnfNamed (..))
+import           NoThunks.Class (NoThunks)
 
 -- pkg hashable:
 import           Data.Hashable

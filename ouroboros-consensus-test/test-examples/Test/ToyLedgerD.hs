@@ -7,6 +7,8 @@
 {-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE StandaloneDeriving         #-}
 
+{-# OPTIONS_GHC -Wno-orphans #-}
+
 module Test.ToyLedgerD where
 
 -- base pkgs:
