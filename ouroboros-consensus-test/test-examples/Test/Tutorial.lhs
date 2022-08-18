@@ -374,11 +374,10 @@ Interface to the Block Header
 
 **`GetHeader`**
 
-The `GetHeader` class **TODO: where does it live?**
-describes how to project a header - a value of type `Header BlockC`
-in our example - out of a block representation.  The implementation
-for `getHeader` is fairly straightforward - we can just use the record
-accessor `bc_header`:
+The `GetHeader` class describes how to project a header -
+which is a value of type `Header BlockC` in our example - out of a block representation.
+The implementation for `getHeader` is fairly straightforward -
+we can just use the record accessor `bc_header`:
 
 > instance GetHeader BlockC where
 >    getHeader          = bc_header
@@ -455,7 +454,9 @@ ever one protocol for a block, again established by our prior instantiation of
 Given that `ValidateView SP` is of type `()` there is only one possible implementation
 for this typeclass.  Later examples will require more interesting views of the block.
 
-** TODO: Describe these configuration classes **
+Our example requires some additional configuration instances to be defined -
+we'll gloss over these for the time being but they allow for some additional
+static configuration of different things pertaining to blocks:
 
 > data instance BlockConfig BlockC = BCfgBlockC
 >   deriving (Generic, NoThunks)
@@ -471,8 +472,6 @@ Consensus and The Ledger
 The _ledger_ specifies a state of the system represented by the blocks
 in a blockchain but also characterizes what transitions are valid for
 any particular state.
-
-**TODO: more explanation here**
 
 Below we'll define a group of typeclasses that together implement a simple
 ledger that uses `BlockC` and that is suitable for our consensus protocol `SP`.
@@ -578,7 +577,7 @@ We can express this as a function:
 
 We use a `Ticked (LedgerState BlockC)` to enforce the invariant that we should
 not apply two blocks in a row - at least one tick (aka slot) must have elapsed
-between block applications. **TODO: motivate this conceptually earlier?**
+between block applications.
 
 
 The interface used by the rest of the ledger infrastructure to access this
