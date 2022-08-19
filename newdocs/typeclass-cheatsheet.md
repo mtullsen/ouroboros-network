@@ -11,11 +11,11 @@ fully determines---directly or indirectly---all the other types.
 ``` haskell
  P[rotocol]                       B[lock]                       L[edger]                     -- (the P,B,L "kinds")
 ===                              ===                           ===
-                                                                                                  ┏━━━━━━━━┓
- p  ──(ConsensusConfig :: P→*)──────────────────────────────────────────────────────────────▶ cc  ┃ static ┃
- p  ◀──(BlockProtocol :: B→P)──── b ──(BlockConfig :: B→*)──────────────────────────────────▶ bc  ┃ config ┃
-                                  b ──(LedgerState :: B→L)──▶ l ──(LedgerCfg :: L→*)────────▶ lc  ┃ data   ┃
-                                                                                                  ┗━━━━━━━━┛
+                                                                                                  ┏━━━━━━━━━━━┓
+ p  ──(ConsensusConfig :: P→*)──────────────────────────────────────────────────────────────▶ cc  ┃{- static-}┃
+ p  ◀──(BlockProtocol :: B→P)──── b ──(BlockConfig :: B→*)──────────────────────────────────▶ bc  ┃{- config-}┃
+                                  b ──(LedgerState :: B→L)──▶ l ──(LedgerCfg :: L→*)────────▶ lc  ┃{- data  -}┃
+                                                                                                  ┗━━━━━━━━━━━┛
                                   
                                   b ──(LedgerState :: B→L)──▶ l ──(AuxLedgerEvent :: L→*)──▶ lev   -- events emitted by ledger
                                                               l ──(LedgerErr :: L→*)───────▶ lerr  -- errors when updating ledger
@@ -45,9 +45,8 @@ fully determines---directly or indirectly---all the other types.
 
 ### Type Constructors That are Type-Generic
 
-Type families are being applied in the definitions of these types, thus they
-effectively function as a type-family.  
-(This list is not exhaustive.)
+These type constructors effectively function as type families (as type families are used in their definitions):
+(This list is not exhaustive of all such types.)
 
 ```haskell
                                   b ────(Point :: B→*)───────────▶ point    -- newtype ... -- a point on the chain: hash & slotno
