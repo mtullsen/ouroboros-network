@@ -648,19 +648,3 @@ its implementation:
 >      B. When 70% through the epoch, we do the snapshot.
 >     -}
 
-
----- Examples & Testing: ledgerViewForecastAt --------------------------------
-
-ldgrAtSlot :: SlotNo -> LedgerState BlockD
-ldgrAtSlot slot =
-  LedgerC{ lsbd_tip     = Point (NotOrigin (Block slot (Hash 0)))
-         , lsbd_count   = 5
-         , lsbd_snapshot= 0
-         }
-
-makeForecast :: SlotNo -> Forecast LedgerViewD
-makeForecast tipslot = ledgerViewForecastAt () (ldgrAtSlot tipslot)
-
-testForecast :: Word64 -> Word64 -> Except OutsideForecastRange (Ticked LedgerViewD)
-testForecast at' for = forecastFor (makeForecast (SlotNo at')) (SlotNo for)
-
