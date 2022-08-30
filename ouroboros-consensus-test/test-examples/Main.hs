@@ -6,6 +6,7 @@ import           Test.Tasty.QuickCheck
 
 -- local modules:
 import           Test.Tutorial
+import           Test.Tutorial2
 import           Test.Example
 import           Test.ToyLedgerC
 import           Test.ToyLedgerD

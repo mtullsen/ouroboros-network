@@ -276,7 +276,7 @@ nextEpochStartSlot wo =
 ---- The Ledger State for Block D: Type family instances ---------------------
 
 data instance LedgerState BlockD =
-  LedgerC
+  LedgerD
     { lsbd_tip    :: Point BlockD  -- ^ Point of the last applied block.
                                    --   (Point is header hash and slot no.)
     , lsbd_count     :: Word64     -- ^ results of the up/down Txs
@@ -455,7 +455,7 @@ instance LedgerSupportsProtocol BlockD where
 
 ldgrAtSlot :: SlotNo -> LedgerState BlockD
 ldgrAtSlot slot =
-  LedgerC{ lsbd_tip      = Point (NotOrigin (Block slot (Hash 0)))
+  LedgerD{ lsbd_tip      = Point (NotOrigin (Block slot (Hash 0)))
          , lsbd_count    = 5 -- current count
          , lsbd_snapshot1= 1 -- count at end of prev epoch
          , lsbd_snapshot2= 0 -- count at end of prev-prev epoch  [the view]
