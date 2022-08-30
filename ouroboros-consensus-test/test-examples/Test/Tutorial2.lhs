@@ -27,7 +27,8 @@ ledger - that is, the sum of the _increment_ transactions minus
 the sum of the _decrement_ transactions is snapshotted as
 part of the ledger.
 
-During the epoch, the snapshot determines which of subset of set of
+During the epoch, the snapshot *from two epochs ago* determines
+which subset of a set of
 20 nodes is allowed to lead slots.  If the snapshot is even,
 then slots contained in that epoch follow a round-robin leadership schedule
 among nodes 0 through 9 inclusive.  Similarly, if the snapshot is odd then
@@ -283,16 +284,21 @@ Ledger
 ======
 
 While this is similar to the `LedgerState` for `BlockC` the `Ledger` instance
-corresponding to `BlockD` now needs to take a snapshot of the count at the
-epoch boundary - this is the `lsbd_snapshot` field below:
+corresponding to `BlockD` needs to hold snapshots of the count at the
+last two epoch boundaries - this is the `lsbd_snapshot1` and `lsbd_snapshot2`
+fields below: 
 
 > data instance LedgerState BlockD =
 >   LedgerD
 >     { lsbd_tip   :: Point BlockD  -- ^ Point of the last applied block.
 >                                   --   (Point is header hash and slot no.)
 >     , lsbd_count    :: Word64     -- ^ results of the up/down Txs
->     , lsbd_snapshot :: Word64     -- ^ snapshot of lsbd_count, made at epoch
->                                   --   boundaries.
+>     , lsbd_snapshot1 :: Word64    -- ^ snapshot of lsbd_count at
+>                                   --   end of previous epoch (1 epoch ago)
+>     , lsbd_snapshot2 :: Word64    -- ^ snapshot of lsbd_count at end
+>                                   --   of epoch (2 epochs ago)
+>                                   --   This will be the LedgerView that
+>                                   --   influences the leader schedule.
 >     }
 >   deriving (Show, Eq, Generic, Serialise, NoThunks)
 
@@ -320,7 +326,8 @@ is still very simple:
 >   }
 >   deriving (Show, Eq, Generic, Serialise, NoThunks)
 
-Because the ledger now needs to track the snapshot in `lsbd_snapshot` we
+Because the ledger now needs to track the snapshots in `lsbd_snapshot1`
+and `lsbd_snapshot2` we
 can express this in terms of ticking a `LedgerState BlockD`.
 We'll write a function (that we'll use later) to express this relationship
 computing the `Ticked (LedgerState BlockD)` resulting from a starting
@@ -332,7 +339,12 @@ no intervening blocks are applied:
 > tickLedgerStateD newSlot ldgrSt =
 >   TickedLedgerStateD $
 >     if isNewEpoch then
->       ldgrSt{lsbd_snapshot = lsbd_count ldgrSt}  -- snapshot the count
+>       ldgrSt{ lsbd_snapshot2= lsbd_snapshot1 ldgrSt
+>                  -- save previous epoch snapshot (assumes we do not
+>                  -- go a full epoch without ticking)
+>             , lsbd_snapshot1= lsbd_count ldgrSt
+>                  -- snapshot the count (at end of previous epoch)
+>             }
 >     else
 >       ldgrSt
 >
@@ -346,6 +358,7 @@ no intervening blocks are applied:
 >       EQ -> False
 >       GT -> error "cannot tick slots backwards"
 
+**James, I wonder if we can delete this now [- Mark]:**
 Note that this implementation merely projects the current `lsbd_count`
 into the snapshot indefinitely far in the future -
 consistent with the assumption that no blocks are applied during the span of
@@ -368,7 +381,7 @@ Applying Blocks
 ---------------
 
 **NICK: is this correct, or will we need to check that the leader of the block
-being applie is valid for the epoch we're in?**
+being applied is valid for the epoch we're in?**
 
 Applying a `BlockD` to a `Ticked (LedgerState BlockD)` is (again) the result
 of applying each individual transaction - exactly as it was in for `BlockC`:
@@ -591,20 +604,21 @@ Ledger/Protocol Integration
 
 Implementing `LedgerSupportsProtocol` requires us to put a little
 more thought into forecasting.  Our range of forecasting now
-ends at the last epoch for which we have a snapshot - so
-`ledgerViewForecastAt` must take this into consideration in
-its implementation:
+ends at the last slot in the following epoch.  There are two cases for which
+we can forecast the ticked ledger view: (1) the slot (`for` in the code below)
+is in the current epoch and (2) the slot is in the following epoch.
 
 > instance LedgerSupportsProtocol BlockD where
 >   protocolLedgerView _ldgrCfg (TickedLedgerStateD ldgrSt) =
->     TickedLedgerViewD (LVD $ lsbd_snapshot ldgrSt)
+>     TickedLedgerViewD (LVD $ lsbd_snapshot2 ldgrSt)
+>       -- note that we use the snapshot from 2 epochs ago.
 >
 >   -- | Borrowing somewhat from Ouroboros/Consensus/Byron/Ledger/Ledger.hs
 >   ledgerViewForecastAt _lccf ldgrSt =
 >     Forecast { forecastAt = at
 >              , forecastFor = \for->
 >                  if NotOrigin for < at then
->                    error "precondition violated: 'NotOrigin for >= at'"
+>                    error "this precondition violated: 'NotOrigin for < at'"
 >                  else if for >= maxFor then
 >                    throwError
 >                      OutsideForecastRange
@@ -613,7 +627,17 @@ its implementation:
 >                         , outsideForecastFor    = for
 >                         }
 >                  else
->                    return $ TickedLedgerViewD $ LVD $ lsbd_snapshot ldgrSt
+>                    return
+>                      $ TickedLedgerViewD $ LVD
+>                      $ if for < nextEpochStartSlot at then
+>                          lsbd_snapshot2 ldgrSt
+>                            -- for the rest of the current epoch,
+>                            -- it's the same as 'protocolLedgerView',
+>                            -- using snapshot from 2 epochs ago.
+>                        else
+>                          lsbd_snapshot1 ldgrSt
+>                            -- we can forecast into the following epoch because
+>                            -- we have the snapshot from 1 epoch ago.
 >              }
 >
 >     where
@@ -625,26 +649,9 @@ its implementation:
 >     -- (the name "max" does seem wrong, but we are following suit with the names
 >     -- and terminology in the 'Ouroboros.Consensus.Forecast' module)
 >     --
->     -- In our case it will be the start of the next epoch, i.e., the slot of the
->     -- next snapshot.  This is when the LedgerView becomes unknown.
+>     -- In our case we can forecast for the current epoch and the following
+>     -- epoch.  The forecast becomes unknown at the start of the epoch
+>     -- after the following epoch:
 >     maxFor :: SlotNo
->     maxFor = nextEpochStartSlot at
->
->     {-
->     FUTURE:
->     The above 'Forecast {}' value is somewhat unsatisfying:
->      - At the last slot in an epoch, we cannot forecast (beyond current slot)
->        - Will the protocol get stuck?
->        - Even if sound, is this practical?
->        - FUTURE WORK: we would like formulate some properties by which we might
->          be assured of soundness.
->
->      - A more usable ledger would ensure maxFor is _always_ >> 0.
->
->     Alternatives for improving the forecast:
->      A. Have two snapshots so we always have one epoch of lead time!
->        - then 'maxfor' significantly greater than 'at' (the older snapshot has
->          the leader schedule).
->      B. When 70% through the epoch, we do the snapshot.
->     -}
+>     maxFor = nextEpochStartSlot at + SlotNo slotsInEpoch
 
