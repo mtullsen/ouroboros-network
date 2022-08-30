@@ -513,13 +513,6 @@ types and functions defined above:
 >   -- | View on a block header required for chain selection.  Here, BlockNo is
 >   --   sufficient. (BlockNo is also the default type for this type family.)
 >   type SelectView    PrtclD = BlockNo
->        -- FUTURE:
->        -- Discussion of the ramifications of the simple BlockNo:
->        --  - If two chains have same same blockno - which?
->        --  - Here, a tie is won by the first block that a node sees,
->        --    so it couldn't switch to a different chain (when BlockNo's equal).
->        --  - What if we sort by blockno & node-ids?
->        --  - What is a sound way?
 >
 >   -- | View on the ledger required by the protocol
 >   type LedgerView    PrtclD = LedgerViewD
