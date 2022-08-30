@@ -476,9 +476,9 @@ From slot 49 (the last slot in epoch 0), we can forecast through slot 99
 >>> mapM_ (\i-> print $ (i, epochOf(At(SlotNo i)), testForecast 49 i)) [49,50,51,99,100]
 
 (49,At (EpochNo 0),ExceptT (Identity (Right (TickedLedgerViewD (LVD 0)))))
-(50,At (EpochNo 1),ExceptT (Identity (Right (TickedLedgerViewD (LVD 0)))))
-(51,At (EpochNo 1),ExceptT (Identity (Right (TickedLedgerViewD (LVD 0)))))
-(99,At (EpochNo 1),ExceptT (Identity (Right (TickedLedgerViewD (LVD 0)))))
+(50,At (EpochNo 1),ExceptT (Identity (Right (TickedLedgerViewD (LVD 1)))))
+(51,At (EpochNo 1),ExceptT (Identity (Right (TickedLedgerViewD (LVD 1)))))
+(99,At (EpochNo 1),ExceptT (Identity (Right (TickedLedgerViewD (LVD 1)))))
 (100,At (EpochNo 2),ExceptT (Identity (Left (OutsideForecastRange {outsideForecastAt = At (SlotNo 49), outsideForecastMaxFor = SlotNo 100, outsideForecastFor = SlotNo 100}))))
 -}
 
