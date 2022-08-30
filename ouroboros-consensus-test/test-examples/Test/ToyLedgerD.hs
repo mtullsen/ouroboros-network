@@ -456,9 +456,9 @@ instance LedgerSupportsProtocol BlockD where
 ldgrAtSlot :: SlotNo -> LedgerState BlockD
 ldgrAtSlot slot =
   LedgerC{ lsbd_tip      = Point (NotOrigin (Block slot (Hash 0)))
-         , lsbd_count    = 5
-         , lsbd_snapshot1= 0
-         , lsbd_snapshot2= 0
+         , lsbd_count    = 5 -- current count
+         , lsbd_snapshot1= 1 -- count at end of prev epoch
+         , lsbd_snapshot2= 0 -- count at end of prev-prev epoch  [the view]
          }
 
 makeForecast :: SlotNo -> Forecast LedgerViewD
