@@ -277,11 +277,15 @@ nextEpochStartSlot wo =
 
 data instance LedgerState BlockD =
   LedgerC
-    { lsbd_tip   :: Point BlockD  -- ^ Point of the last applied block.
-                                  --   (Point is header hash and slot no.)
-    , lsbd_count    :: Word64     -- ^ results of the up/down Txs
-    , lsbd_snapshot :: Word64     -- ^ snapshot of lsbd_count, made at epoch
-                                  --   boundaries.
+    { lsbd_tip    :: Point BlockD  -- ^ Point of the last applied block.
+                                   --   (Point is header hash and slot no.)
+    , lsbd_count     :: Word64     -- ^ results of the up/down Txs
+    , lsbd_snapshot1 :: Word64     -- ^ snapshot of lsbd_count at
+                                   --   end of previous epoch (1 epoch ago)
+    , lsbd_snapshot2 :: Word64     -- ^ snapshot of lsbd_count at end
+                                   --   of epoch (2 epochs ago)
+                                   --   This will be the LedgerView that
+                                   --   influences the leader schedule.
     }
   deriving (Show, Eq, Generic, Serialise, NoThunks)
 
@@ -291,9 +295,10 @@ newtype instance Ticked (LedgerState BlockD) =
   }
   deriving (Show, Eq, Generic, Serialise, NoThunks)
 
--- | We want to define a 'LedgerView p' and a 'Ticked(LedgerView p)'.
+-- | We need to define a 'LedgerView p' and a 'Ticked(LedgerView p)'.
 
--- | Our LedgerView will be 'lsbd_snapshot' (see above), so the type we want is
+-- | Our LedgerView will be 'lsbd_snapshot2' (see above), so the type we
+-- want is the following:
 
 newtype LedgerViewD = LVD Word64 
   deriving (Show, Eq, Generic, Serialise, NoThunks)
@@ -374,7 +379,12 @@ tickLedgerStateD ::
 tickLedgerStateD newSlot ldgrSt =
   TickedLedgerStateD $
     if isNewEpoch then
-      ldgrSt{lsbd_snapshot= lsbd_count ldgrSt}  -- snapshot the count
+      ldgrSt{ lsbd_snapshot2= lsbd_snapshot1 ldgrSt
+               -- save previous epoch snapshot (assumes we cannot
+               -- go an epoch without ticking)
+            , lsbd_snapshot1= lsbd_count ldgrSt
+               -- snapshot the count (at end of previous epoch)
+            }
     else
       ldgrSt 
       
@@ -395,14 +405,15 @@ instance UpdateLedger BlockD where {}
 
 instance LedgerSupportsProtocol BlockD where
   protocolLedgerView _ldgrCfg (TickedLedgerStateD ldgrSt) =
-    TickedLedgerViewD (LVD $ lsbd_snapshot ldgrSt)
+    TickedLedgerViewD (LVD $ lsbd_snapshot2 ldgrSt)
+       -- note that we use a snapshot from 2 epochs ago.
 
   -- | Borrowing somewhat from Ouroboros/Consensus/Byron/Ledger/Ledger.hs
   ledgerViewForecastAt _lccf ldgrSt =
     Forecast { forecastAt= at
              , forecastFor= \for->
                  if NotOrigin for < at then
-                   error "precondition violated: 'NotOrigin for >= at'"
+                   error "this precondition violated: 'NotOrigin for < at'"
                  else if for >= maxFor then
                    throwError
                      OutsideForecastRange
@@ -411,7 +422,17 @@ instance LedgerSupportsProtocol BlockD where
                         , outsideForecastFor   = for
                         }
                  else
-                   return $ TickedLedgerViewD $ LVD $ lsbd_snapshot ldgrSt
+                   return
+                     $ TickedLedgerViewD $ LVD
+                     $ if for < nextEpochStartSlot at then
+                         lsbd_snapshot2 ldgrSt
+                         -- same as 'protocolLedgerView' for the rest of the
+                         -- current epoch (i.e., using snapshot from 2 epochs
+                         -- ago):
+                       else
+                         lsbd_snapshot1 ldgrSt
+                         -- we can forecast into the next epoch because
+                         -- we have the snapshot for the previous epoch
              }
 
     where
@@ -423,37 +444,21 @@ instance LedgerSupportsProtocol BlockD where
     -- (the name "max" does seem wrong, but we are following suit with the names
     -- and terminology in the 'Ouroboros.Consensus.Forecast' module)
     --
-    -- In our case it will be the start of the next epoch, i.e., the slot of the
-    -- next snapshot.  This is when the LedgerView becomes unknown.
+    -- In our case we can forecast for the current epoch and the following
+    -- epoch.  The forecast becomes unknown at the start of the epoch
+    -- after the following epoch:
     maxFor :: SlotNo
-    maxFor = nextEpochStartSlot at
+    maxFor = nextEpochStartSlot at + SlotNo slotsInEpoch
     
-    {-
-    FUTURE:
-    The above 'Forecast {}' value is somewhat unsatisfying:
-     - At the last slot in an epoch, we cannot forecast (beyond current slot)
-       - Will the protocol get stuck?
-       - Even if sound, is this practical?
-       - FUTURE WORK: we would like formulate some properties by which we might
-         be assured of soundness.
-    
-     - A more usable ledger would ensure maxFor is _always_ >> 0.
-    
-    Alternatives for improving the forecast:
-     A. Have two snapshots so we always have one epoch of lead time!
-       - then 'maxfor' significantly greater than 'at' (the older snapshot has
-         the leader schedule).
-     B. When 70% through the epoch, we do the snapshot.
-    -}
-
 
 ---- Examples & Testing: ledgerViewForecastAt --------------------------------
 
 ldgrAtSlot :: SlotNo -> LedgerState BlockD
 ldgrAtSlot slot =
-  LedgerC{ lsbd_tip     = Point (NotOrigin (Block slot (Hash 0)))
-         , lsbd_count   = 5
-         , lsbd_snapshot= 0
+  LedgerC{ lsbd_tip      = Point (NotOrigin (Block slot (Hash 0)))
+         , lsbd_count    = 5
+         , lsbd_snapshot1= 0
+         , lsbd_snapshot2= 0
          }
 
 makeForecast :: SlotNo -> Forecast LedgerViewD
@@ -463,13 +468,18 @@ testForecast :: Word64 -> Word64 -> Except OutsideForecastRange (Ticked LedgerVi
 testForecast at' for = forecastFor (makeForecast (SlotNo at')) (SlotNo for)
 
 {- | 
->>> mapM_ (\i-> print $ testForecast 49 i) [49,50,51]  -- slot 50 is next epoch.
 
-ExceptT (Identity (Right (TickedLedgerViewD (LVD 0))))
-ExceptT (Identity (Left (OutsideForecastRange {outsideForecastAt = At (SlotNo 49), outsideForecastMaxFor = SlotNo 50, outsideForecastFor = SlotNo 50})))
-ExceptT (Identity (Left (OutsideForecastRange {outsideForecastAt = At (SlotNo 49), outsideForecastMaxFor = SlotNo 50, outsideForecastFor = SlotNo 51})))
+In this test, slot 50 is next epoch, slot 100 is epoch following that.
+From slot 49 (the last slot in epoch 0), we can forecast through slot 99
+(the last slot in epoch 1):
 
-I.e., at slot 49 we can forecast at slot 49 but no further.
+>>> mapM_ (\i-> print $ (i, epochOf(At(SlotNo i)), testForecast 49 i)) [49,50,51,99,100]
+
+(49,At (EpochNo 0),ExceptT (Identity (Right (TickedLedgerViewD (LVD 0)))))
+(50,At (EpochNo 1),ExceptT (Identity (Right (TickedLedgerViewD (LVD 0)))))
+(51,At (EpochNo 1),ExceptT (Identity (Right (TickedLedgerViewD (LVD 0)))))
+(99,At (EpochNo 1),ExceptT (Identity (Right (TickedLedgerViewD (LVD 0)))))
+(100,At (EpochNo 2),ExceptT (Identity (Left (OutsideForecastRange {outsideForecastAt = At (SlotNo 49), outsideForecastMaxFor = SlotNo 100, outsideForecastFor = SlotNo 100}))))
 -}
 
 
