@@ -106,8 +106,8 @@ Epochs occur at a fixed interval:
 
 We also write a function from `WithOrigin SlotNo` to the corresponding epoch number to
 express this behavior.  The `WithOrigin` type allows us to describe the behavior
-of this in the presence of the first (origin) block on the chain.  In this case
-we consider `Origin` to be a special epoch before the epochs of the slots proper:
+of this in the presence of the first (origin) block on the chain.
+We will consider `Origin` to be a special epoch before the epochs of the slots proper:
 
 > epochOf :: WithOrigin SlotNo -> WithOrigin EpochNo
 > epochOf Origin        = Origin
@@ -423,9 +423,9 @@ of applying each individual transaction - exactly as it was in for `BlockC`:
 Note that prior to `applyBlockLedgerResult` being invoked, the calling
 code will have already established that the header is valid and that the
 header matches the block.  As a result, we do not need to check that
-the leader is correct here.  Also, in this case applying blocks cannot fail
-because applying transactions cannot fail - even in cases where there is
-overflow `Data.Word` will wrap around.
+the leader is correct here.  Also, for this tutorial's notion of blocks
+applying blocks cannot fail because applying transactions cannot fail -
+even in cases where there is overflow `Data.Word` will wrap around.
 
 Protocol
 ========
@@ -510,8 +510,7 @@ thus far have required, but the organization of the functions interacting with
 We can determine if a particular node is the leader of a slot given the slot number
 along with the epoch snapshot.  We can express this determination via a function modeling
 the leadership schedule.  For ease of use in our instantiation of `ConsensusProtocol PrtclD`
-we will represent the epoch snapshot using the `Ticked ChainDepStateD` we
-just defined:
+we will represent the epoch snapshot using the `LedgerView` we just defined:
 
 > isLeader :: NodeId -> SlotNo -> LedgerView PrtclD -> Bool
 > isLeader nodeId (SlotNo slot) (LVD cntr) =
@@ -545,29 +544,10 @@ types and functions defined above:
 >   type ValidationErr PrtclD = String
 >
 >   -- | checkIsLeader - Am I the leader this slot?
->   --
->   -- NOTE: For Protocol D
->   --   - there is no real evidence of leadership in this protocol
->   --   - what might be akin to a private key (for generating evidence) is
->   --     extracted from the configuration using 'cpd_nodeId cfg'
->   --   thus, for this simple example, we ignore the
->   --   '_cbl :: PrtclD_CanBeLeader' argument.
->   --
->   -- NOTE: In a more realistic Protocol
->   --  - We would expect:
->   --    - 'checkIsLeader' to be creating IsLeader evidence
->   --      from CanBeLeader evidence.
->   --    - the IsLeader evidence to end up in the block header
->   --      (as this method will be invoked as part of block forging).
->   --  - From the point of view of consumers of headers,
->   --    - The IsLeader evidence would be a part of the ValidateView
->   --      projection of the header.
->   --    - (As an aside: in the real system, the whole header is
->   --       the ValidateView.)
 >   checkIsLeader cfg _cbl slot tcds =
 >     case ccpd_nodeId cfg of
 >       Just (PrtclD_CanBeLeader nodeId)
->         -- not providing any proof
+>         -- not providing any cryptographic proof
 >         | isLeader nodeId slot (tickedChainDepLV tcds) -> Just PrtclD_IsLeader
 >       _                             -> Nothing
 >
@@ -672,7 +652,7 @@ Summary and Review
 ==================
 
 Above, we defined a block, ledger, and consensus protocol as well as
-written the class/family instances necessary to connect them together.
+wrote the class/family instances necessary to connect them together.
 The behavior of the blockchain modeled by these is very simple
 and does not deal with security considerations in any depth
 but does implement behavior - the leadership schedule - such that
@@ -687,7 +667,7 @@ example involving `BlockC`:
   allowing a less trivial version of leadership to be
   implemented
 - A node identifier was added to our block type
-- The `LedgerState` for block type required the relevant
+- The `LedgerState` for our block type required the relevant
   data to be snapshotted so that it could be tracked
 - The logic for applying blocks to the ledger in `ApplyBlock`
   needed to be aware of the epoch changes such that it could
@@ -698,13 +678,8 @@ example involving `BlockC`:
   snapshot for the epoch
 - Forecasting, as implemented in `LedgerSupportsProtocol`, needed
   to know when to stop being able to forecast - namely when
-  the supply of snapshot data is exhausted.
+  the supply of snapshot data is exhausted
 
 While this is a large ecosystem of interrelated typeclasses and
 families, the overall organization of things is such that
 Haskell's type checking can help guide the implementation.
-Starting from our very trivial `BlockC` example, we can
-add real features simply by changing a few key functions
-and subsequently enhancing some of the types used by those
-functions with the additional data required to implement
-them.
