@@ -316,6 +316,7 @@ test-suite test-examples
   other-modules:
                        Test.Example
                      , Test.Tutorial
+                     , Test.Tutorial2
                      , Test.Utilities
                      , Test.ToyLedger1
                      , Test.ToyLedgerC

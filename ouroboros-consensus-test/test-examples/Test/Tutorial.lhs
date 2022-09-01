@@ -7,8 +7,6 @@ This example is a compilable Literate Haskell (`.lhs`) file that
 instantiates the `ConsensusProtocol` typeclass to serve as an
 example of some of the high-level concepts in `ouroboros-consensus`
 
-**TODO: More**
-
 This example uses several extensions:
 
 > {-# LANGUAGE TypeFamilies               #-}
@@ -31,15 +29,27 @@ First, some imports we'll need:
 > import GHC.Generics (Generic)
 > import Codec.Serialise (Serialise)
 > import NoThunks.Class (NoThunks, OnlyCheckWhnfNamed (..))
-> import Test.Utilities (Hash)
 > import Ouroboros.Consensus.Block.Abstract
+>   (blockNo, blockPoint, castHeaderFields, castPoint, BlockNo, SlotNo,
+>    BlockConfig, BlockProtocol, CodecConfig, GetHeader(..), GetPrevHash(..),
+>    Header, StorageConfig, ChainHash, HasHeader(..),
+>    HeaderFields(HeaderFields, headerFieldSlot, headerFieldBlockNo,
+>                  headerFieldHash),
+>     HeaderHash,
+>     Point,
+>     StandardHash )
 > import Ouroboros.Consensus.Protocol.Abstract
 > import Ouroboros.Consensus.Ticked
-> import Ouroboros.Consensus.Block (BlockSupportsProtocol (selectView, validateView))
+> import Ouroboros.Consensus.Block
+>   (BlockSupportsProtocol (selectView, validateView))
 > import Ouroboros.Consensus.Ledger.Abstract
+>   (GetTip(..), IsLedger(..), LedgerCfg,
+>    LedgerResult(LedgerResult, lrEvents, lrResult),
+>    LedgerState, ApplyBlock(..), UpdateLedger)
 > import Ouroboros.Consensus.Ledger.SupportsProtocol (LedgerSupportsProtocol(..))
 > import Ouroboros.Consensus.Forecast (trivialForecast)
-> import Ouroboros.Consensus.HeaderValidation (ValidateEnvelope, BasicEnvelopeValidation, HasAnnTip)
+> import Ouroboros.Consensus.HeaderValidation
+>   (ValidateEnvelope, BasicEnvelopeValidation, HasAnnTip)
 
 Conceptual Overview and Definitions of Key Terms
 ================================================
@@ -100,8 +110,8 @@ The static configuration for `SP` is defined by defining an instance for the
 `checkIsLeader` require an associated `ConsensusConfig p` so we define a simple one here:
 
 > data instance ConsensusConfig SP =
->  SP_Config  { cfgsp_slotsLedByMe :: Set SlotNo
->             }
+>   SP_Config  { cfgsp_slotsLedByMe :: Set SlotNo
+>              }
 
 Next, we instantiate the `ConsensusProtocol` for `SP`:
 
@@ -124,16 +134,16 @@ Next, we instantiate the `ConsensusProtocol` for `SP`:
 >
 >   protocolSecurityParam _cfg = k
 >
->   tickChainDepState     _ _ _ _ = TickedTrivial
+>   tickChainDepState _ _ _ _ = TickedTrivial
 >
->   updateChainDepState   _ _ _ _ = return ()
+>   updateChainDepState _ _ _ _ = return ()
 >
 >   reupdateChainDepState _ _ _ _ = ()
 
 Finally we define a few extra things used in this instantiation:
 
 > data SP_CanBeLeader = SP_CanBeLeader -- Evidence that we /can/ be a leader
-> data SP_IsLeader    = SP_IsLeader    -- Evidence that we /are/ leader
+> data SP_IsLeader = SP_IsLeader       -- Evidence that we /are/ leader
 >
 > k :: SecurityParam
 > k = SecurityParam { maxRollbacks = 1 }
@@ -288,8 +298,6 @@ The `Ouroboros.Consensus.Protocol.Praos` module contains the
 instantiation of `ConsensusProtocol` for Praos.
 
 
-
-
 Blocks: The View From Consensus
 ===============================
 
@@ -297,8 +305,6 @@ In the discussion above, the reader may have noticed that we have only
 presented _views_ of some of the things consensus deals with.  This is
 to reduce coupling between `ConsensusProtocol p` and any particular
 block or ledger implementation.
-
-**TODO: more intro material**
 
 To enhance our example we'll implement a simple block
 and ledger that can be used with `SP` that logically keeps track of a
@@ -315,13 +321,14 @@ We'll start by defining the transaction type - this is what the block
 will contain:
 
 > data Tx = Inc | Dec
->           deriving (Show, Eq, Generic, Serialise)
+>   deriving (Show, Eq, Generic, Serialise)
 
 Next, we'll define the block itself:
 
-> data BlockC = BlockC { bc_header :: Header BlockC
->                      , bc_body   :: [Tx]
->                      }
+> data BlockC =
+>   BlockC { bc_header :: Header BlockC
+>          , bc_body :: [Tx]
+>          }
 
 Which is to say, a block is just a header (`Header BlockC`) followed by a
 list of transactions (`[Tx]`) - we'll need to instantiate the `Header` family for `BlockC`.
@@ -338,13 +345,12 @@ This corresponds to the `Header` data family (from `Ouroboros.Consensus.Block.Ab
 which we'll instantiate as:
 
 > data instance Header BlockC =
->   HdrBlockC
->     { hbc_SlotNo  :: SlotNo
->     , hbc_BlockNo :: BlockNo
->     , hbc_Hash    :: HeaderHash BlockC
->     , hbc_prev    :: ChainHash BlockC
->     }
->   deriving stock    (Show, Eq, Generic)
+>   HdrBlockC { hbc_SlotNo :: SlotNo
+>             , hbc_BlockNo :: BlockNo
+>             , hbc_Hash :: HeaderHash BlockC
+>             , hbc_prev :: ChainHash BlockC
+>             }
+>   deriving stock (Show, Eq, Generic)
 >   deriving anyclass (Serialise)
 
 The `HeaderHash` type family describes the type used to represent
@@ -380,9 +386,9 @@ The implementation for `getHeader` is fairly straightforward -
 we can just use the record accessor `bc_header`:
 
 > instance GetHeader BlockC where
->    getHeader          = bc_header
->    blockMatchesHeader = \_ _ -> True -- TODO: actually implement this function
->    headerIsEBB        = const Nothing
+>    getHeader = bc_header
+>    blockMatchesHeader = \_ _ -> True
+>    headerIsEBB = const Nothing
 
 
 **`GetPrevHash`**
@@ -403,9 +409,9 @@ We implement this both for `Header Block`:
 
 > instance HasHeader (Header BlockC) where
 >   getHeaderFields hdr = HeaderFields
->                          { headerFieldSlot    = hbc_SlotNo hdr
+>                          { headerFieldSlot = hbc_SlotNo hdr
 >                          , headerFieldBlockNo = hbc_BlockNo hdr
->                          , headerFieldHash    = hbc_Hash hdr
+>                          , headerFieldHash = hbc_Hash hdr
 >                          }
 
 As well as `BlockC` itself - which calls the `getHeaderFields` defined for `Header BlockC`:
@@ -417,10 +423,11 @@ As well as `BlockC` itself - which calls the `getHeaderFields` defined for `Head
 
 **Validation**
 
-**TODO: what should we say about these?**
+These classes require implementation but for this tutorial we don't
+really need to deal with them - so we'll leave them empty for now:
 
-> instance HasAnnTip               BlockC where {}
-> instance ValidateEnvelope        BlockC where {}
+> instance HasAnnTip BlockC where {}
+> instance ValidateEnvelope BlockC where {}
 > instance BasicEnvelopeValidation BlockC where {}
 
 Associating the Block and the Protocol - `BlockSupportsProtocol` and `BlockProtocol`
@@ -449,7 +456,7 @@ ever one protocol for a block, again established by our prior instantiation of
 
 > instance BlockSupportsProtocol BlockC where
 >   validateView _ _ = ()
->   selectView   _bcfg hdr  = blockNo hdr
+>   selectView _bcfg hdr = blockNo hdr
 
 Given that `ValidateView SP` is of type `()` there is only one possible implementation
 for this typeclass.  Later examples will require more interesting views of the block.
@@ -501,11 +508,14 @@ keep track of some information about the most recent block we have
 seen.
 
 > data instance LedgerState BlockC =
+>
 >   LedgerC
->      { lsbc_tip   :: Point BlockC -- the hash and slot number of the most recent block
->      , lsbc_count :: Word64       -- the computed result of applying all the transactions
->      }
->    deriving (Show, Eq, Generic, Serialise)
+>     -- the hash and slot number of the most recent block
+>     { lsbc_tip :: Point BlockC
+>     -- the computed result of applying all the transactions
+>     , lsbc_count :: Word64
+>     }
+>   deriving (Show, Eq, Generic, Serialise)
 
 The `Point` type (defined in `Ouroboros.Network.Block`) describes a particular
 place in the blockchain - a pair of a slot and a block hash.
@@ -519,9 +529,8 @@ As such, we will also need to define an instance of `Ticked`
 for our ledger state.  In our example, this is essentially an `Identity` functor:
 
 > newtype instance Ticked (LedgerState BlockC) =
->   TickedLedgerStateC {
->     unTickedLedgerStateC :: LedgerState BlockC
->   }
+>   TickedLedgerStateC
+>     { unTickedLedgerStateC :: LedgerState BlockC }
 >   deriving (Show, Eq, Generic, Serialise)
 
 
@@ -532,10 +541,13 @@ The `IsLedger` class describes some of the basic functionality and associated
 types for a ledger.  Though we are here using
 
 > instance IsLedger (LedgerState BlockC) where
->   type instance LedgerErr      (LedgerState BlockC) = Void
+>   type instance LedgerErr  (LedgerState BlockC) = Void
 >   type instance AuxLedgerEvent (LedgerState BlockC) = Void
+>
 >   applyChainTickLedgerResult _cfg _slot ldgrSt =
->     LedgerResult {lrEvents = [], lrResult = TickedLedgerStateC ldgrSt}
+>     LedgerResult { lrEvents = []
+>                  , lrResult = TickedLedgerStateC ldgrSt
+>                  }
 
 The `LedgerErr` type is the type of errors associated with this ledger that can be
 thrown while applying blocks or transactions.  In the case of `LedgerState BlockC`

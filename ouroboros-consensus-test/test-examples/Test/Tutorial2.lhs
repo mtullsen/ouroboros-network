@@ -110,7 +110,7 @@ of this in the presence of the first (origin) block on the chain.
 We will consider `Origin` to be a special epoch before the epochs of the slots proper:
 
 > epochOf :: WithOrigin SlotNo -> WithOrigin EpochNo
-> epochOf Origin        = Origin
+> epochOf Origin = Origin
 > epochOf (NotOrigin s) = NotOrigin $ EpochNo $ unSlotNo s `div` slotsInEpoch
 
 From a particular `WithOrigin Slot` we can also determine when the next epoch
@@ -119,10 +119,10 @@ will begin:
 > nextEpochStartSlot :: WithOrigin SlotNo -> SlotNo
 > nextEpochStartSlot wo =
 >   SlotNo $ case wo of
->              Origin         -> slotsInEpoch
+>              Origin -> slotsInEpoch
 >              NotOrigin slot -> slotsInEpoch + slot' - (slot' `mod` slotsInEpoch)
 >                                where
->                                slot' = unSlotNo slot
+>                                 slot' = unSlotNo slot
 
 Hashing
 -------
@@ -134,8 +134,8 @@ infrastructure built on top of the `Hashable` class from the
 Our infastructure is quite simple - a `newtype` for hashes:
 
 > newtype Hash = Hash Int
->   deriving stock    (Eq, Ord, Show, Generic)
->   deriving newtype  (NoThunks, Hashable, Serialise)
+>   deriving stock (Eq, Ord, Show, Generic)
+>   deriving newtype (NoThunks, Hashable, Serialise)
 
 And a function to turn `Hashable` things into values of type `Hash`.
 
@@ -164,7 +164,7 @@ Our block and transaction type is structurally the same as `BlockC` - a
 header followed by a list of transactions `Tx`:
 
 > data BlockD = BlockD { bd_header :: Header BlockD
->                      , bd_body   :: [Tx]
+>                      , bd_body :: [Tx]
 >                      }
 >   deriving NoThunks via OnlyCheckWhnfNamed "BlockD" BlockD
 
@@ -185,14 +185,14 @@ use a `NodeId`:
 
 > data instance Header BlockD =
 >   HdrBlockD
->     { hbd_SlotNo  :: SlotNo
+>     { hbd_SlotNo :: SlotNo
 >     , hbd_BlockNo :: BlockNo
 >     -- hash of whole block (excepting this field)
->     , hbd_Hash    :: HeaderHash BlockD
->     , hbd_prev    :: ChainHash BlockD
->     , hbd_nodeId  :: NodeId
+>     , hbd_Hash :: HeaderHash BlockD
+>     , hbd_prev :: ChainHash BlockD
+>     , hbd_nodeId :: NodeId
 >     }
->   deriving stock    (Show, Eq, Generic)
+>   deriving stock (Show, Eq, Generic)
 >   deriving anyclass (Serialise)
 >   deriving NoThunks via OnlyCheckWhnfNamed "HdrBlockD" (Header BlockD)
 
@@ -254,9 +254,9 @@ the header - `GetHeader`, `GetPrevHash`, and `HasHeader`:
 
 > instance HasHeader (Header BlockD) where
 >   getHeaderFields hdr = HeaderFields
->                           { headerFieldSlot    = hbd_SlotNo hdr
+>                           { headerFieldSlot = hbd_SlotNo hdr
 >                           , headerFieldBlockNo = hbd_BlockNo hdr
->                           , headerFieldHash    = hbd_Hash hdr
+>                           , headerFieldHash = hbd_Hash hdr
 >                           }
 
 > instance HasHeader BlockD where
@@ -289,8 +289,8 @@ Validation
 Similarly, this example does not have any interesting validation logic,
 but a few more trivial implementations are needed:
 
-> instance HasAnnTip               BlockD where {}
-> instance ValidateEnvelope        BlockD where {}
+> instance HasAnnTip BlockD where {}
+> instance ValidateEnvelope BlockD where {}
 > instance BasicEnvelopeValidation BlockD where {}
 
 
@@ -304,9 +304,9 @@ fields below:
 
 > data instance LedgerState BlockD =
 >   LedgerD
->     { lsbd_tip   :: Point BlockD  -- ^ Point of the last applied block.
+>     { lsbd_tip :: Point BlockD    -- ^ Point of the last applied block.
 >                                   --   (Point is header hash and slot no.)
->     , lsbd_count    :: Word64     -- ^ results of the up/down Txs
+>     , lsbd_count :: Word64        -- ^ results of the up/down Txs
 >     , lsbd_snapshot1 :: Word64    -- ^ snapshot of lsbd_count at
 >                                   --   end of previous epoch (1 epoch ago)
 >     , lsbd_snapshot2 :: Word64    -- ^ snapshot of lsbd_count at end
@@ -353,10 +353,10 @@ no intervening blocks are applied:
 > tickLedgerStateD newSlot ldgrSt =
 >   TickedLedgerStateD $
 >     if isNewEpoch then
->       ldgrSt{ lsbd_snapshot2= lsbd_snapshot1 ldgrSt
+>       ldgrSt{ lsbd_snapshot2 = lsbd_snapshot1 ldgrSt
 >                  -- save previous epoch snapshot (assumes we do not
 >                  -- go a full epoch without ticking)
->             , lsbd_snapshot1= lsbd_count ldgrSt
+>             , lsbd_snapshot1 = lsbd_count ldgrSt
 >                  -- snapshot the count (at end of previous epoch)
 >             }
 >     else
@@ -380,11 +380,13 @@ time represented by the slot argument.
 We can now use `tickLedgerStateD` to instantiate `IsLedger`:
 
 > instance IsLedger (LedgerState BlockD) where
->   type instance LedgerErr      (LedgerState BlockD) = String
+>   type instance LedgerErr (LedgerState BlockD) = String
 >   type instance AuxLedgerEvent (LedgerState BlockD) = ()
 >
 >   applyChainTickLedgerResult _cfg slot ldgrSt =
->     LedgerResult {lrEvents = [], lrResult = tickLedgerStateD slot ldgrSt}
+>     LedgerResult { lrEvents = []
+>                  , lrResult = tickLedgerStateD slot ldgrSt
+>                  }
 
 `UpdateLedger` is necessary but its implementation is always empty:
 
@@ -411,14 +413,14 @@ of applying each individual transaction - exactly as it was in for `BlockC`:
 
 > instance ApplyBlock (LedgerState BlockD) BlockD where
 >   applyBlockLedgerResult _ldgrCfg b tickedLdgrSt =
->      pure LedgerResult { lrResult = b `applyBlockTo` tickedLdgrSt
->                        , lrEvents = []
->                        }
+>     pure LedgerResult { lrResult = b `applyBlockTo` tickedLdgrSt
+>                       , lrEvents = []
+>                       }
 >
 >   reapplyBlockLedgerResult _ldgrCfg b tickedLdgrSt =
->           LedgerResult { lrResult = b `applyBlockTo` tickedLdgrSt
->                        , lrEvents = []
->                        }
+>     LedgerResult { lrResult = b `applyBlockTo` tickedLdgrSt
+>                  , lrEvents = []
+>                  }
 
 Note that prior to `applyBlockLedgerResult` being invoked, the calling
 code will have already established that the header is valid and that the
@@ -443,7 +445,7 @@ that the proof we can be a leader should not be easy to falsify -
 it is fine for our example:
 
 > data PrtclD_CanBeLeader = PrtclD_CanBeLeader NodeId
->                           deriving (Eq, Show, Generic, NoThunks)
+>   deriving (Eq, Show, Generic, NoThunks)
 
 The proof that we are a slot leader should be evident from the context -
 the combination of the slot number and the ledger's snapshot parity
@@ -461,9 +463,9 @@ as well as the particular `NodeId` - expressed as a `PrtclD_CanBeLeader`
 > data instance ConsensusConfig PrtclD =
 >   PrtclD_Config
 >     { ccpd_securityParam :: SecurityParam  -- ^ i.e., 'k'
->     , ccpd_nodeId        :: Maybe PrtclD_CanBeLeader
+>     , ccpd_mbCanBeLeader :: Maybe PrtclD_CanBeLeader
 >
->       -- ^ To lead, a node must have a 'ccpd_nodeId' equal to
+>       -- ^ To lead, a node must have a 'ccpd_mbCanBeLeader' equal to
 >       -- `Just (PrtclD_CanBeLeader nodeid)`.
 >       -- We expect this value would be extracted from a config file.
 >       --
@@ -493,7 +495,7 @@ to determine the leadership schedule.  As such, we do not need
 any notion of state specific to `PrtclD`:
 
 > data ChainDepStateD = ChainDepStateD
->                       deriving (Eq,Show,Generic,NoThunks)
+>   deriving (Eq,Show,Generic,NoThunks)
 
 However, the `Ticked` representation contains the `LedgerViewD` containing
 the epoch snapshot.   This is due to functions for `ConsensusProtocol` only
@@ -501,7 +503,7 @@ taking the `LedgerView` as an argument in some cases:
 
 > data instance Ticked ChainDepStateD =
 >   TickedChainDepStateD { tickedChainDepLV :: LedgerViewD }
->   deriving (Eq,Show,Generic,NoThunks)
+>   deriving (Eq, Show, Generic, NoThunks)
 
 `ConsensusProtocol` is set up this way mostly because this is what implementations
 thus far have required, but the organization of the functions interacting with
@@ -527,15 +529,15 @@ types and functions defined above:
 > instance ConsensusProtocol PrtclD where
 >
 >   type ChainDepState PrtclD = ChainDepStateD
->   type IsLeader      PrtclD = PrtclD_IsLeader
->   type CanBeLeader   PrtclD = PrtclD_CanBeLeader
+>   type IsLeader PrtclD = PrtclD_IsLeader
+>   type CanBeLeader PrtclD = PrtclD_CanBeLeader
 >
 >   -- | View on a block header required for chain selection.  Here, BlockNo is
 >   --   sufficient. (BlockNo is also the default type for this type family.)
->   type SelectView    PrtclD = BlockNo
+>   type SelectView PrtclD = BlockNo
 >
 >   -- | View on the ledger required by the protocol
->   type LedgerView    PrtclD = LedgerViewD
+>   type LedgerView PrtclD = LedgerViewD
 >
 >   -- | View on a block header required for header validation
 >   type ValidateView  PrtclD = NodeId  -- need this for the leader check
@@ -545,7 +547,7 @@ types and functions defined above:
 >
 >   -- | checkIsLeader - Am I the leader this slot?
 >   checkIsLeader cfg _cbl slot tcds =
->     case ccpd_nodeId cfg of
+>     case ccpd_mbCanBeLeader cfg of
 >       Just (PrtclD_CanBeLeader nodeId)
 >         -- not providing any cryptographic proof
 >         | isLeader nodeId slot (tickedChainDepLV tcds) -> Just PrtclD_IsLeader
@@ -585,7 +587,7 @@ and `selectView` projecting out the block number:
 > instance BlockSupportsProtocol BlockD where
 >   validateView _bcfg hdr = hbd_nodeId hdr
 >
->   selectView   _bcfg hdr = blockNo hdr
+>   selectView _bcfg hdr = blockNo hdr
 
 All that remains is to establish `PrtclD` as the protocol for
 `BlockD`:
