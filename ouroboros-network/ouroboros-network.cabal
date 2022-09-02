@@ -168,6 +168,7 @@ library
                        dns,
                        fingertree        >=0.1.4.2 && <0.2,
                        iproute,
+                       mtl,
                        nothunks,
                        network           >=3.1.2 && <3.2,
                        pretty-simple,
@@ -298,8 +299,10 @@ test-suite test
                        Test.Ouroboros.Network.PeerSelection.Json
                        Test.Ouroboros.Network.PeerSelection.MockEnvironment
                        Test.Ouroboros.Network.PeerSelection.PeerGraph
+                       Test.Ouroboros.Network.PeerSelection.PeerMetric
                        Test.Ouroboros.Network.NodeToNode.Version
                        Test.Ouroboros.Network.NodeToClient.Version
+                       Test.Ouroboros.Network.Orphans
                        Test.Ouroboros.Network.ShrinkCarefully
                        Test.Ouroboros.Network.Testnet
                        Test.Ouroboros.Network.Testnet.Simulation.Node

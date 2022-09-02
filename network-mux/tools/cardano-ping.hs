@@ -28,7 +28,7 @@ import           Data.Maybe (fromMaybe, isNothing)
 import           Data.TDigest
 import           Data.Text (unpack)
 import           Data.Word
-import           Network.Socket (AddrInfo)
+import           Network.Socket (AddrInfo, StructLinger (..))
 import qualified Network.Socket as Socket
 import           System.Console.GetOpt
 import           System.Environment (getArgs, getProgName)
@@ -39,8 +39,6 @@ import           Text.Printf
 import           Network.Mux.Bearer.Socket
 import           Network.Mux.Timeout
 import           Network.Mux.Types
-
-import           Linger
 
 mainnetMagic :: Word32
 mainnetMagic = 764824073
@@ -200,6 +198,7 @@ data NodeVersion =       NodeToClientVersionV9  Word32
                        | NodeToClientVersionV11 Word32
                        | NodeToClientVersionV12 Word32
                        | NodeToClientVersionV13 Word32
+                       | NodeToClientVersionV14 Word32
                        | NodeToNodeVersionV1   Word32
                        | NodeToNodeVersionV2   Word32
                        | NodeToNodeVersionV3   Word32
@@ -259,6 +258,9 @@ handshakeReqEnc versions =
        <> CBOR.encodeInt (fromIntegral magic)
     encodeVersion (NodeToClientVersionV13 magic) =
           CBOR.encodeWord (13 `setBit` nodeToClientVersionBit)
+       <> CBOR.encodeInt (fromIntegral magic)
+    encodeVersion (NodeToClientVersionV14 magic) =
+          CBOR.encodeWord (14 `setBit` nodeToClientVersionBit)
        <> CBOR.encodeInt (fromIntegral magic)
     encodeVersion (NodeToNodeVersionV1 magic) =
           CBOR.encodeWord 1
@@ -354,6 +356,7 @@ handshakeDec = do
              (11, True) -> Right . NodeToClientVersionV11 <$> CBOR.decodeWord32
              (12, True) -> Right . NodeToClientVersionV12 <$> CBOR.decodeWord32
              (13, True) -> Right . NodeToClientVersionV13 <$> CBOR.decodeWord32
+             (14, True) -> Right . NodeToClientVersionV14 <$> CBOR.decodeWord32
              _          -> return $ Left $ UnknownVersionInRsp version
 
     decodeWithMode :: (Word32 -> Bool -> NodeVersion)
