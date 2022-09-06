@@ -1,6 +1,4 @@
-
-                       Further Documentation Tasks
-
+# Further Documentation Tasks
 ## More Code and Documentation Thereof
 
 - Extensions of the Tutorial2.lhs code (along with documentation) that
