@@ -1,4 +1,4 @@
-index-state: 2022-02-18T00:00:00Z
+index-state: 2022-07-01T00:00:00Z
 
 packages: ./ouroboros-network-testing
           ./monoidal-synchronisation
@@ -18,6 +18,7 @@ packages: ./ouroboros-network-testing
           ./ouroboros-consensus-shelley
           ./ouroboros-consensus-shelley-test
           ./ouroboros-consensus-test
+          ./ouroboros-consensus-cardano-tools
           ./ntp-client
           ./cardano-client
 
@@ -27,6 +28,9 @@ constraints:
   , bimap >= 0.4.0
   , ListLike >= 4.7.3
   , witherable >= 0.4
+
+  -- Plutus dependency
+  , algebraic-graphs < 0.7
 
 package Win32-network
   tests: True
@@ -79,6 +83,9 @@ package ouroboros-consensus-cardano
   flags: +asserts
 
 package ouroboros-consensus-cardano-test
+  tests: True
+
+package ouroboros-consensus-cardano-tools
   tests: True
 
 
@@ -193,8 +200,8 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-prelude
-  tag: bb4ed71ba8e587f672d06edf9d2e376f4b055555
-  --sha256: 00h10l5mmiza9819p9v5q5749nb9pzgi20vpzpy1d34zmh6gf1cj
+  tag: 533aec85c1ca05c7d171da44b89341fb736ecfe5
+  --sha256: 0z2y3wzppc12bpn9bl48776ms3nszw8j58xfsdxf97nzjgrmd62g
   subdir:
     cardano-prelude
     cardano-prelude-test
@@ -202,8 +209,8 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-base
-  tag: 0f3a867493059e650cda69e20a5cbf1ace289a57
-  --sha256: 0p0az3sbkhb7njji8xxdrfb0yx2gc8fmrh872ffm8sfip1w29gg1
+  tag: 631cb6cf1fa01ab346233b610a38b3b4cba6e6ab
+  --sha256: 0944wg2nqazmhlmsynwgdwxxj6ay0hb9qig9l128isb2cjia0hlp
   subdir:
     base-deriving-via
     binary
@@ -219,8 +226,8 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-ledger
-  tag: 830e4e41d772087d7df69c6fd5a2bf5439ad97a6
-  --sha256: 1065z9y51bhdf3yy0d2hchk8d8crji31cznjp02arddbyv6n57lr
+  tag: 49613f11e034485c8377945c86c0465726c0860c
+  --sha256: 0gxb9xghsacr0qaljhq3qzvmb2f1wwmly89prwqy4fdm9mvqiq95
   subdir:
     eras/alonzo/impl
     eras/alonzo/test-suite
@@ -249,8 +256,8 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/plutus
-  tag: f680ac6979e069fcc013e4389ee607ff5fa6672f
-  --sha256: 180jq8hd0jlg48ya7b5yw3bnd2d5czy0b1agy9ng3mgnzpyq747i
+  tag: 8ab4c3355c5fdf67dcf6acc1f5a14668d5e6f0a9
+  --sha256: 12d6bndmj0dxl6xlaqmf78326yp5hw093bmybmqfpdkvk4mgz03j
   subdir:
     plutus-ledger-api
     plutus-tx

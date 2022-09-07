@@ -69,6 +69,8 @@ import           Ouroboros.Network.ConnectionId
 import           Ouroboros.Network.Protocol.Handshake
 import           Ouroboros.Network.Protocol.Handshake.Codec
 import           Ouroboros.Network.Protocol.Handshake.Version
+import           Ouroboros.Network.Socket (configureSocket,
+                     configureSystemdSocket)
 
 import           Ouroboros.Network.ConnectionHandler
 import           Ouroboros.Network.ConnectionManager.Core
@@ -95,7 +97,7 @@ import           Ouroboros.Network.PeerSelection.Governor.Types
                      PeerSelectionCounters (..), TracePeerSelection (..))
 import           Ouroboros.Network.PeerSelection.LedgerPeers
                      (UseLedgerAfter (..), withLedgerPeers)
-import           Ouroboros.Network.PeerSelection.PeerMetric (PeerMetrics (..))
+import           Ouroboros.Network.PeerSelection.PeerMetric (PeerMetrics)
 import           Ouroboros.Network.PeerSelection.PeerStateActions
                      (PeerConnectionHandle, PeerSelectionActionsTrace (..),
                      PeerStateActionsArguments (..), withPeerStateActions)
@@ -231,6 +233,20 @@ data ArgumentsExtra m = ArgumentsExtra {
       -- is using @TIME_WAIT@.
       --
     , daTimeWaitTimeout :: DiffTime
+
+      -- | Churn interval between churn events in deadline mode.  A small fuzz
+      -- is added (max 10 minutes) so that not all nodes churn at the same time.
+      --
+      -- By default it is set to 3300 seconds.
+      --
+    , daDeadlineChurnInterval :: DiffTime
+
+      -- | Churn interval between churn events in bulk sync mode.  A small fuzz
+      -- is added (max 1 minute) so that not all nodes churn at the same time.
+      --
+      -- By default it is set to 300 seconds.
+      --
+    , daBulkChurnInterval :: DiffTime
     }
 
 --
@@ -442,6 +458,16 @@ data Interfaces ntnFd ntnAddr ntnVersion ntnVersionData
         diNtnSnocket
           :: Snocket m ntnFd ntnAddr,
 
+        -- | node-to-node socket configuration
+        --
+        diNtnConfigureSocket
+          :: ntnFd -> Maybe ntnAddr -> m (),
+
+        -- | node-to-node systemd socket configuration
+        --
+        diNtnConfigureSystemdSocket
+          :: ntnFd -> ntnAddr -> m (),
+
         -- | node-to-node handshake configuration
         --
         diNtnHandshakeArguments
@@ -557,6 +583,8 @@ runM
     -> m Void
 runM Interfaces
        { diNtnSnocket
+       , diNtnConfigureSocket
+       , diNtnConfigureSystemdSocket
        , diNtnHandshakeArguments
        , diNtnAddressType
        , diNtnDataFlow
@@ -606,6 +634,8 @@ runM Interfaces
        , daReadUseLedgerAfter
        , daProtocolIdleTimeout
        , daTimeWaitTimeout
+       , daDeadlineChurnInterval
+       , daBulkChurnInterval
        }
      Applications
        { daApplicationInitiatorMode
@@ -686,6 +716,7 @@ runM Interfaces
                           cmIPv6Address         = Nothing,
                           cmAddressType         = const Nothing,
                           cmSnocket             = diNtcSnocket,
+                          cmConfigureSocket     = \_ _ -> return (),
                           cmTimeWaitTimeout     = local_TIME_WAIT_TIMEOUT,
                           cmOutboundIdleTimeout = local_PROTOCOL_IDLE_TIMEOUT,
                           connectionDataFlow    = uncurry localDataFlow,
@@ -793,6 +824,7 @@ runM Interfaces
                           cmIPv6Address,
                           cmAddressType         = diNtnAddressType,
                           cmSnocket             = diNtnSnocket,
+                          cmConfigureSocket     = diNtnConfigureSocket,
                           connectionDataFlow    = uncurry diNtnDataFlow,
                           cmPrunePolicy         = simplePrunePolicy,
                           -- Server is not running, it will not be able to
@@ -879,6 +911,8 @@ runM Interfaces
                           Async.withAsync
                           (Governor.peerChurnGovernor
                             dtTracePeerSelectionTracer
+                            daDeadlineChurnInterval
+                            daBulkChurnInterval
                             daPeerMetrics
                             churnModeVar
                             churnRng
@@ -916,6 +950,7 @@ runM Interfaces
                           cmIPv6Address,
                           cmAddressType         = diNtnAddressType,
                           cmSnocket             = diNtnSnocket,
+                          cmConfigureSocket     = diNtnConfigureSocket,
                           connectionDataFlow    = uncurry diNtnDataFlow,
                           cmPrunePolicy         = Diffusion.Policies.prunePolicy observableStateVar,
                           cmConnectionsLimits   = daAcceptedConnectionsLimit,
@@ -997,13 +1032,15 @@ runM Interfaces
                              policyRngVar (readTVar churnModeVar)
                              daPeerMetrics (epErrorDelay exitPolicy)))
                         $ \governorThread ->
-                        withSockets tracer diNtnSnocket
-                                    ( catMaybes
-                                        [ daIPv4Address
-                                        , daIPv6Address
-                                        ]
-                                    )
-                                    $ \sockets addresses -> do
+                          withSockets tracer diNtnSnocket
+                                      (\sock addr -> diNtnConfigureSocket sock (Just addr))
+                                      (\sock addr -> diNtnConfigureSystemdSocket sock addr)
+                                      ( catMaybes
+                                          [ daIPv4Address
+                                          , daIPv6Address
+                                          ]
+                                      )
+                                      $ \sockets addresses -> do
                           --
                           -- Run server
                           --
@@ -1026,6 +1063,8 @@ runM Interfaces
                                   Async.withAsync
                                     (Governor.peerChurnGovernor
                                       dtTracePeerSelectionTracer
+                                      daDeadlineChurnInterval
+                                      daBulkChurnInterval
                                       daPeerMetrics
                                       churnModeVar
                                       churnRng
@@ -1096,11 +1135,12 @@ run
     -> ApplicationsExtra RemoteAddress IO a
     -> IO Void
 run tracers tracersExtra args argsExtra apps appsExtra = do
+    let tracer = dtDiffusionInitializationTracer tracers
     -- We run two services: for /node-to-node/ and /node-to-client/.  The
     -- naming convention is that we use /local/ prefix for /node-to-client/
     -- related terms, as this is a local only service running over a unix
     -- socket / windows named pipe.
-    handle (\e -> traceWith (dtDiffusionInitializationTracer tracers) (DiffusionErrored e)
+    handle (\e -> traceWith tracer (DiffusionErrored e)
                >> throwIO e)
          $ withIOManager $ \iocp -> do
              let diNtnSnocket :: SocketSnocket
@@ -1162,6 +1202,10 @@ run tracers tracersExtra args argsExtra apps appsExtra = do
              runM
                Interfaces {
                  diNtnSnocket,
+                 diNtnConfigureSocket = configureSocket,
+                 diNtnConfigureSystemdSocket =
+                   configureSystemdSocket
+                     (SystemdSocketConfiguration `contramap` tracer),
                  diNtnHandshakeArguments,
                  diNtnAddressType = socketAddressType,
                  diNtnDataFlow = nodeDataFlow,

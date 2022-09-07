@@ -5,15 +5,24 @@ import           System.IO.Temp
 import           Test.Tasty
 
 import qualified Test.Ouroboros.Storage
+import           Test.Util.TestEnv
 
 main :: IO ()
 main = do
   sysTmpDir <- Dir.getTemporaryDirectory
   withTempDirectory sysTmpDir "cardano-s-m" $ \tmpDir ->
-    defaultMain (tests tmpDir)
+    defaultMainWithTestEnv defaultTestEnvConfig (tests tmpDir)
 
 tests :: FilePath -> TestTree
 tests tmpDir =
   testGroup "ouroboros-storage"
   [ Test.Ouroboros.Storage.tests tmpDir
   ]
+
+-- A bug in CI requires to modify this component; If you encountered
+-- ```
+-- test-storage: cannot execute binary file: Exec format error
+-- ```
+-- increment the following /unlucky/ counter and cross fingers:
+--
+-- 1
