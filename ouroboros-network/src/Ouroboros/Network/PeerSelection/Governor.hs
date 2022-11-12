@@ -534,17 +534,17 @@ peerSelectionGovernorLoop tracer
           timedDecision     <- atomically (decisionAction <|> wakeup)
           cancelTimeout wakeupTimeout
           return timedDecision
-
+        
     guardedDecisions :: Time
                      -> PeerSelectionState peeraddr peerconn
                      -> Guarded (STM m) (TimedDecision m peeraddr peerconn)
     guardedDecisions blockedAt st =
       -- All the alternative potentially-blocking decisions.
-         Monitor.connections          actions st
-      <> Monitor.jobs                 jobPool st
+         Monitor.connections          actions st  -- e.g, did connection fail?
+      <> Monitor.jobs                 jobPool st  -- 
       <> Monitor.targetPeers          actions st
       <> Monitor.localRoots           actions st
-
+         -- (MT: ^ the four entry points for ...Governor.Monitor)
       -- All the alternative non-blocking internal decisions.
       <> RootPeers.belowTarget        actions blockedAt  st
       <> KnownPeers.belowTarget       actions     policy st
@@ -564,7 +564,7 @@ peerSelectionGovernorLoop tracer
       -- invariant (and if we ignored that, we'd try to immediately forget
       -- roots peers because we'd be above target for known peers).
 
-
+      
 wakeupDecision :: PeerSelectionState peeraddr peerconn
                -> TimedDecision m peeraddr peerconn
 wakeupDecision st _now =

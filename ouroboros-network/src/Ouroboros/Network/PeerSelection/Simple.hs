@@ -75,7 +75,7 @@ withPeerSelectionActions
             readPeerSelectionTargets = readTargets,
             readLocalRootPeers = toList <$> readTVar localRootsVar,
             requestPublicRootPeers = requestPublicRootPeers,
-            requestPeerGossip = \_ -> pure [],
+            requestPeerGossip = \_ -> pure [],  -- MT: TODO[implement]
             peerStateActions
           }
     withAsync

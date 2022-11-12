@@ -29,6 +29,8 @@ data PeerAdvertise = DoNotAdvertisePeer
                    | DoAdvertisePeer
   deriving (Eq, Show, Ord, Generic)
 
+  -- MT: dead in src: never discriminated on
+
 instance FromJSON PeerAdvertise where
   parseJSON = withBool "PeerAdvertise" $
       return . bool DoNotAdvertisePeer DoAdvertisePeer

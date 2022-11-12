@@ -86,12 +86,13 @@ data TraceLocalRootPeers peerAddr exception =
 -- roots are provided wrapped in a 'StrictTVar', which value might change
 -- (re-read from a config file).  The resolved dns names are available through
 -- the output 'StrictTVar'.
---
+-- MT: TODO: still unclear what a localRootPeerIs
+
 localRootPeersProvider
   :: forall m peerAddr resolver exception.
      ( MonadAsync m
      , MonadDelay m
-     , Eq (Async m Void)
+     , Eq (Async m Void)  -- MT: odd!
      , Ord peerAddr
      )
   => Tracer m (TraceLocalRootPeers peerAddr exception)
@@ -278,7 +279,7 @@ data TracePublicRootPeers =
   deriving Show
 
 -- |
--- TODO track PeerAdvertise
+-- TODO track PeerAdvertise  (MT:)
 --
 publicRootPeersProvider
   :: forall peerAddr resolver exception a m.

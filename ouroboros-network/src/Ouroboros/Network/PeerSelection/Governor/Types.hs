@@ -177,7 +177,8 @@ data PeerSelectionActions peeraddr peerconn m = PeerSelectionActions {
        -- where we are supposed to select n from each group.
        --
        readLocalRootPeers       :: STM m [(Int, Map peeraddr PeerAdvertise)],
-
+          -- MT: PeerAdvertise the only info worth 'exporting'?
+         
        -- | Request a sample of public root peers.
        --
        -- It is intended to cover use cases including:
@@ -187,12 +188,14 @@ data PeerSelectionActions peeraddr peerconn m = PeerSelectionActions {
        -- * a pre-distributed snapshot of stake pool relays from the blockchain
        --
        requestPublicRootPeers   :: Int -> m (Set peeraddr, DiffTime),
-
+          -- MT: DiffTime? known?
+          -- MT: 'sample' a better name?
+         
        -- | The action to contact a known peer and request a sample of its
        -- known peers.
        --
        -- This is synchronous, but it should expect to be interrupted by a
-       -- timeout asynchronous exception. Failures are throw as exceptions.
+       -- timeout asynchronous exception. Failures are thrown as exceptions.
        --
        requestPeerGossip        :: peeraddr -> m [peeraddr],
 
@@ -236,7 +239,7 @@ data PeerStateActions peeraddr peerconn m = PeerStateActions {
 --
 data PeerSelectionState peeraddr peerconn = PeerSelectionState {
 
-       targets                  :: !PeerSelectionTargets,
+       targets                  :: !PeerSelectionTargets,  -- MT: could be changed, not now tho.
 
        -- | The current set of local root peers. This is structured as a
        -- bunch of groups, with a target for each group. This gives us a set of
@@ -246,9 +249,14 @@ data PeerSelectionState peeraddr peerconn = PeerSelectionState {
        -- the groups must be disjoint.
        --
        localRootPeers           :: !(LocalRootPeers peeraddr),
+                                   -- MT: declared by SPO (groups and count), in topology file
 
        publicRootPeers          :: !(Set peeraddr),
-
+                                   -- MT: also from config file used as substite
+                                   -- for ledger peers, we trust these!  from
+                                   -- older design (pre-eclipse evasion) These
+                                   -- two don't change, except we re-read
+                                   -- topology file, e.g., SIGHUP.
        -- |
        --
        knownPeers               :: !(KnownPeers peeraddr),
@@ -256,7 +264,8 @@ data PeerSelectionState peeraddr peerconn = PeerSelectionState {
        -- |
        --
        establishedPeers         :: !(EstablishedPeers peeraddr peerconn),
-
+                                   -- MT: running KeepAlive
+                                   --     & any Warm Protocols (none now)
        -- |
        --
        activePeers              :: !(Set peeraddr),
@@ -283,7 +292,8 @@ data PeerSelectionState peeraddr peerconn = PeerSelectionState {
 
        -- | Rng for fuzzy delay
        fuzzRng                  :: !StdGen,
-
+          -- MT: to protect nodes from same decision at same time.
+         
        -- | 'PeerSelectionCounters' counters cache. Allows to only trace
        -- values when necessary.
        --
@@ -490,9 +500,11 @@ data Guarded m a =
     -- never return this constructor, e.g.  'Monitor.targetPeers',
     -- 'Monitor.jobs', 'Monitor.connections', and thus the governor has always
     -- something to do.
-    --
+    -- GR-FIXME[D2]: above comment is DOU
+    -- MT: can we get rid of this constructor? don't we have a unit for ...?
     GuardedSkip !(Maybe (Min Time))
 
+       
     -- | 'Guarded' is used to provide an action through 'FirstToFinish'
     -- synchronisation, possibly with a timeout, to
     -- the governor main loop.
@@ -541,6 +553,8 @@ data Decision m peeraddr peerconn = Decision {
        -- completion, but also allows chaining further job actions.
        --
        decisionJobs  :: [Job () m (Completion m peeraddr peerconn)]
+         -- MT: job or jobs?
+         -- MT: feels ~ ad hoc
      }
 
 -- | Decision which has access to the current time, rather than the time when

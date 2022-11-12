@@ -49,7 +49,7 @@ import           Ouroboros.Network.PeerSelection.RootPeersDNS
 
 import           Text.Printf
 
--- | Only use the ledger after the given slot number.
+-- | Only use the ledger after the given slot number.  (MT:!)
 data UseLedgerAfter = DontUseLedger | UseLedgerAfter SlotNo deriving (Eq, Show)
 
 isLedgerPeersEnabled :: UseLedgerAfter -> Bool
@@ -170,7 +170,7 @@ reRelativeStake pl =
       let d = fromRational s ::Double in
       PoolStake $ toRational $ sqrt d
 
-
+-- MT: 'pickPeers' a local function:
 -- | Try to pick n random peers.
 pickPeers :: forall m. Monad m
           => StdGen

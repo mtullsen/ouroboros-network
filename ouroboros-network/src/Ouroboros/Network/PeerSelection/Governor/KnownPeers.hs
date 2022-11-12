@@ -31,8 +31,8 @@ import qualified Ouroboros.Network.PeerSelection.LocalRootPeers as LocalRootPeer
 
 
 -- | If we are below the target of /known peers/ we gossip (if we are above the
--- gossip request threashold).
---
+-- gossip request threshold).
+--  MT: "gossip request threshold"?
 belowTarget :: (MonadAsync m, MonadTimer m, Ord peeraddr)
             => PeerSelectionActions peeraddr peerconn m
             -> MkGuardedDecision peeraddr peerconn m
@@ -97,7 +97,7 @@ belowTarget actions
                           - inProgressGossipReqs
     availableForGossip    = KnownPeers.availableForGossip knownPeers
 
-
+-- MT: KEY
 jobGossip :: forall m peeraddr peerconn.
              (MonadAsync m, MonadTimer m, Ord peeraddr)
           => PeerSelectionActions peeraddr peerconn m
