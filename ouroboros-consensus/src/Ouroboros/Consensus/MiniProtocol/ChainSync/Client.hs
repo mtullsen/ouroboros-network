@@ -1239,7 +1239,7 @@ instance Exception ChainSyncClientException
 
   Scribbled notes during meeting with Duncan:
 
-   geensis mode: compare clock to our chain
+   genesis mode: compare clock to our chain
    do we have enough peers?
    still only interested in chains that don't fork more than k from our own chain
 
